@@ -1,0 +1,91 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7.2-alpine
+    container_name: werewolf-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    networks:
+      - werewolf-net
+
+  lobby:
+    build:
+      context: .
+      dockerfile: services/lobby/Dockerfile
+    container_name: werewolf-lobby
+    environment:
+      - STATE_STORE_BACKEND=redis
+      - REDIS_URL=redis://redis:6379
+      - GAMEMASTER_URL=http://gamemaster:8000
+      - POD_NAME=lobby-compose-pod
+      - NODE_NAME=worker-node-1
+    depends_on:
+      - redis
+    networks:
+      - werewolf-net
+
+  gamemaster:
+    build:
+      context: .
+      dockerfile: services/gamemaster/Dockerfile
+    container_name: werewolf-gamemaster
+    environment:
+      - STATE_STORE_BACKEND=redis
+      - REDIS_URL=redis://redis:6379
+      - POD_NAME=gamemaster-compose-pod
+      - NODE_NAME=worker-node-2
+    depends_on:
+      - redis
+    networks:
+      - werewolf-net
+
+  chat:
+    build:
+      context: .
+      dockerfile: services/chat/Dockerfile
+    container_name: werewolf-chat
+    environment:
+      - STATE_STORE_BACKEND=redis
+      - REDIS_URL=redis://redis:6379
+      - POD_NAME=chat-compose-pod
+      - NODE_NAME=worker-node-3
+    depends_on:
+      - redis
+    networks:
+      - werewolf-net
+
+  frontend:
+    build:
+      context: .
+      dockerfile: services/frontend/Dockerfile
+    container_name: werewolf-frontend
+    networks:
+      - werewolf-net
+
+  gateway:
+    build:
+      context: .
+      dockerfile: services/gateway/Dockerfile
+    container_name: werewolf-gateway
+    ports:
+      - "8080:8000"
+    environment:
+      - LOBBY_URL=http://lobby:8000
+      - GAMEMASTER_URL=http://gamemaster:8000
+      - CHAT_URL=http://chat:8000
+      - FRONTEND_URL=http://frontend:80
+      - POD_NAME=gateway-compose-pod
+      - NODE_NAME=ingress-node
+    depends_on:
+      - lobby
+      - gamemaster
+      - chat
+      - frontend
+    networks:
+      - werewolf-net
+
+networks:
+  werewolf-net:
+    driver: bridge
