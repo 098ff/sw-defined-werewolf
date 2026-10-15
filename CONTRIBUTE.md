@@ -8,11 +8,11 @@ Welcome to the **Multiplayer Werewolf (Software-Defined Systems)** project! This
 
 | Member Name | Default Role / Area of Responsibility | Relevant Guide |
 |---|---|---|
-| **<TBU>** | Infrastructure, K3s, Flannel CNI, MetalLB, K8s Manifests, Scripts | [01-role-infra-k8s.md](docs/roles/01-role-infra-k8s.md) |
-| **<TBU>** | Gateway Reverse Proxy, Trace Aggregator, React Frontend UI & Polling | [02-role-gateway-frontend.md](docs/roles/02-role-gateway-frontend.md) |
-| **<TBU>** | Lobby Service, Room Management, Session Tokens, Capacity Rules | [03-role-lobby.md](docs/roles/03-role-lobby.md) |
-| **<TBU>** | GameMaster Service, Rule Engine, FSM Transitions, PlayerView Sanitizer | [04-role-gamemaster.md](docs/roles/04-role-gamemaster.md) |
-| **<TBU>** | Chat Service, Shared `StateStore` Layer, Redis CAS, Docker Compose & QA | [05-role-chat-statestore-qa.md](docs/roles/05-role-chat-statestore-qa.md) |
+| **Chanatda Konchom** | Infrastructure, K3s, Flannel CNI, MetalLB, K8s Manifests, Scripts | [01-role-infra-k8s.md](docs/roles/01-role-infra-k8s.md) |
+| **Khanapong Kamchoom** | Gateway Reverse Proxy, Trace Aggregator, React Frontend UI & Polling | [02-role-gateway-frontend.md](docs/roles/02-role-gateway-frontend.md) |
+| **Thanyaporn Rattanacharoentham** | Lobby Service, Room Management, Session Tokens, Capacity Rules | [03-role-lobby.md](docs/roles/03-role-lobby.md) |
+| **Nantaporn Phuaphanbun** | GameMaster Service, Rule Engine, FSM Transitions, PlayerView Sanitizer | [04-role-gamemaster.md](docs/roles/04-role-gamemaster.md) |
+| **Chayut Archamongkol** | Chat Service, Shared `StateStore` Layer, Redis CAS, Docker Compose & QA | [05-role-chat-statestore-qa.md](docs/roles/05-role-chat-statestore-qa.md) |
 
 *(Note: Roles can be adapted among team members as agreed upon, but each microservice must have a single dedicated owner).*
 
