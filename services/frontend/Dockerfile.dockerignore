@@ -1,0 +1,6 @@
+# BuildKit picks this up for services/frontend/Dockerfile (build context is the repo root).
+**/node_modules
+**/dist
+**/.venv
+**/__pycache__
+.git
