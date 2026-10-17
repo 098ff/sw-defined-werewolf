@@ -1,6 +1,6 @@
-// Night action names. Contract §5.2 only fixes SEER_CHECK; the other two must match the GameMaster.
+// Night action names; must match ACTION_BY_ROLE in services/gamemaster/app/engine.py.
 export const NIGHT_ACTIONS = {
-  WEREWOLF: 'WOLF_KILL',
+  WEREWOLF: 'WEREWOLF_KILL',
   DOCTOR: 'DOCTOR_PROTECT',
   SEER: 'SEER_CHECK'
 };

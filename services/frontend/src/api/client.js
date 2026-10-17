@@ -5,12 +5,22 @@ import { recordTrace } from './traceStore';
 
 const REQUEST_TIMEOUT_MS = 6000;
 
-// Server-minus-client clock offset (ms), learned from the gateway's Date header.
-// Lets countdowns track the server-authoritative phase_end_time even if the client clock drifts.
+// Server-minus-client clock offset (ms). Lets countdowns track the server-authoritative
+// phase_end_time even if the client clock drifts. Preferred source is the GameMaster's
+// `server_time` (Redis TIME, same clock as phase_end_time); the gateway Date header is a fallback.
 let clockOffsetMs = 0;
+let haveServerTime = false;
 export const serverNow = () => Date.now() + clockOffsetMs;
 
+export function syncServerTime(serverTimeSec, sentAt) {
+  if (typeof serverTimeSec !== 'number' || serverTimeSec <= 0) return;
+  const midpoint = sentAt + (Date.now() - sentAt) / 2;
+  clockOffsetMs = serverTimeSec * 1000 - midpoint;
+  haveServerTime = true;
+}
+
 function learnClockOffset(res, sentAt) {
+  if (haveServerTime) return;
   const header = res.headers.get('date');
   if (!header) return;
   const server = Date.parse(header);
@@ -45,6 +55,7 @@ export async function api(path, { method = 'GET', body, token } = {}) {
     } catch {
       /* non-JSON body */
     }
+    if (json?.ok) syncServerTime(json.data?.server_time, sentAt);
     result = {
       ok: Boolean(json?.ok) && res.ok,
       status: res.status,
