@@ -39,18 +39,21 @@ The architecture strictly fulfills all requirements set forth in the course spec
 ### 2.1 Hardware
 - **1x Ethernet/WiFi Router:** TP-Link TL-WR841N (provided in course kit, configured for wired LAN).
 - **5x Raspberry Pi Kits:** Raspberry Pi 3 B+ with power adapters, micro SD cards (16GB+ Class 10), and Ethernet cables.
-- **1x Student Notebook:** Running hypervisor (VirtualBox, VMware, or UTM) with an Ubuntu Linux 64-bit VM allocated at least 2 vCPUs and 2 GB RAM.
+- **1x Student Notebook:** Running hypervisor (VirtualBox on macOS/Windows/Linux) with an Ubuntu Linux VM allocated at least 2 vCPUs and 2 GB RAM.  
+  👉 **Detailed VM Guide for macOS / VirtualBox:** [docs/04-virtualbox-master-setup.md](docs/04-virtualbox-master-setup.md)
 - **Wired Connectivity:** All 5 Pis and the Notebook must be plugged directly into the TP-Link LAN ports.
 
 ### 2.2 Network & IP Plan (Example Subnet `192.168.1.0/24`)
 - **Router Gateway:** `192.168.1.1`
-- **Master Node (Notebook VM - Bridged Adapter):** `192.168.1.100` (Static DHCP Lease)
+- **Master Node (Notebook VM - Dual NIC):**
+  - **Adapter 1 (Bridged to Ethernet LAN):** `192.168.1.100` (Static IP for K3s Master)
+  - **Adapter 2 (NAT to Host Wi-Fi):** Outbound internet access for downloading packages
 - **Worker Nodes (Pi 1 to 5):** `192.168.1.101` – `192.168.1.105`
 - **MetalLB VIP Pool:** `192.168.1.240 – 192.168.1.250` (Outside DHCP lease range)
 - **Game Access URL:** `http://192.168.1.240` (Assigned to `gateway-service`)
 
 > [!IMPORTANT]
-> The Notebook VM network adapter **MUST be set to Bridged Mode** (bound to the physical Ethernet port) so that it shares the exact same broadcast domain as the Raspberry Pis. NAT mode will prevent Pis from joining the K3s cluster.
+> The Notebook VM Adapter 1 **MUST be set to Bridged Mode** (bound to the physical Ethernet port) with **Promiscuous Mode = Allow All** so that it shares the exact same broadcast domain as the Raspberry Pis and allows Flannel VXLAN packets to traverse the bridge. Adapter 2 (NAT) provides outbound internet access. Detailed instructions: [docs/04-virtualbox-master-setup.md](docs/04-virtualbox-master-setup.md).
 
 ---
 
@@ -66,31 +69,31 @@ The architecture strictly fulfills all requirements set forth in the course spec
 4. Reboot Pis and confirm network reachability via ping from the notebook VM.
 
 ### 3.2 Install K3s Control-Plane (on Notebook VM)
-On the Ubuntu VM, install K3s Server with default ServiceLB disabled (to use MetalLB) and Flannel CNI enabled:
+On the Ubuntu VM, execute our turnkey master installation script:
 
 ```bash
-curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable servicelb --flannel-backend=vxlan" sh -
-
-# Verify master status
-sudo kubectl get nodes
-
-# Retrieve node join token
-sudo cat /var/lib/rancher/k3s/server/node-token
+# Automated 1-step master setup (disables servicelb, enables Flannel VXLAN, binds 192.168.1.100)
+./scripts/install-master.sh
 ```
 
-### 3.3 Join Raspberry Pi Workers to Cluster
-SSH into each Raspberry Pi (`pi-01` through `pi-05`) and run the K3s agent join command:
+The script will configure kernel parameters, disable swap, install K3s, label the master node (`node-role=control-plane`), prepare `/var/lib/werewolf-redis`, and output the node join token.
 
+### 3.3 Join Raspberry Pi Workers to Cluster
+From the Master VM, run the automated worker join script:
+
+```bash
+./scripts/join-workers.sh
+```
+
+Or run the join command directly on each Raspberry Pi (`pi-01` through `pi-05`):
 ```bash
 curl -sfL https://get.k3s.io | K3S_URL=https://192.168.1.100:6443 \
   K3S_TOKEN="<NODE_TOKEN_FROM_MASTER>" sh -
 ```
 
-Back on the Notebook VM, label the nodes appropriately:
+Verify that all 5 workers are joined and labeled:
 ```bash
-kubectl label node <master-hostname> node-role=control-plane
-kubectl label node pi-01 pi-02 pi-03 pi-04 pi-05 node-role=pi
-kubectl get nodes -o wide
+kubectl get nodes -o wide --show-labels
 ```
 
 ### 3.4 Install MetalLB (Bare-Metal Load Balancer)
@@ -114,15 +117,29 @@ To fulfill the rubric requirement of **Automated Deployment**, the entire applic
 
 ### 4.1 Build and Pre-pull Images (ARM64 Optimization)
 Because the Raspberry Pi 3 B+ has constrained memory (1GB RAM) and limited network bandwidth during on-site grading:
-1. Build Multi-Arch ARM64 images on the notebook:
+1. **Build Multi-Arch ARM64 images:**
    ```bash
    ./scripts/build-images.sh
-   ./scripts/push-images.sh
    ```
-2. Pre-pull all images onto all 5 Raspberry Pis before demo evaluation to eliminate image download delays during fault-tolerance testing:
-   ```bash
-   ./scripts/pre-pull.sh
-   ```
+2. **Push or Export Images:**
+   - **Online (Registry):**
+     ```bash
+     ./scripts/push-images.sh
+     ```
+   - **Offline Mode (For lab demos without internet connection):**
+     ```bash
+     # Save all 5 images to compressed tarball
+     ./scripts/push-images.sh --save-tar
+     ```
+3. **Pre-load images onto all 5 Raspberry Pis:**
+   - **Online Pre-pull:**
+     ```bash
+     ./scripts/pre-pull.sh
+     ```
+   - **Offline Pre-load:**
+     ```bash
+     ./scripts/pre-pull.sh --import-tar werewolf-images.tar.gz
+     ```
 
 ### 4.2 One-Command Deployment
 Run the automated deployment script on the Master VM:
@@ -131,17 +148,38 @@ Run the automated deployment script on the Master VM:
 ```
 
 This script automatically executes:
-1. Creates namespace `werewolf`.
-2. Deploys `redis` with PersistentVolume pinned strictly to the Control-Plane node.
-3. Deploys `gateway` with Hard Pod Anti-Affinity against handlers.
-4. Deploys handler microservices (`frontend`, `lobby`, `gamemaster`, `chat`) distributed across Pi workers.
-5. Deploys Kubernetes `ClusterIP` and MetalLB `LoadBalancer` services.
-6. Waits for all readiness probes to pass.
+1. Verifies cluster connectivity and ready nodes.
+2. Creates namespace `werewolf`.
+3. Deploys `redis` with PersistentVolume pinned strictly to the Control-Plane node.
+4. Deploys `gateway` with Hard Pod Anti-Affinity against handlers and master-fallback tolerations.
+5. Deploys handler microservices (`frontend`, `lobby`, `gamemaster`, `chat`) distributed across Pi workers.
+6. Deploys MetalLB Layer-2 LoadBalancer service (`http://192.168.1.240`).
+7. Waits for all readiness and liveness probes to pass.
+8. Displays instant SDN cross-node scheduling verification.
 
 Verify deployment:
 ```bash
 kubectl get pods -n werewolf -o wide
 kubectl get svc -n werewolf -o wide
+python3 tests/fault/verify_topology.py
+```
+
+### 4.3 Independent Local Verification (Before Hardware Assembly)
+Developers and evaluators can verify the entire Kubernetes topology locally without physical Raspberry Pis:
+
+```bash
+# 1. Run static manifest compliance lint tests (zero external dependencies)
+python3 -m unittest tests/unit/test_manifest_compliance.py
+
+# 2. (Optional) Create local 1-Master + 5-Worker cluster via k3d
+./scripts/local-cluster.sh up
+
+# 3. Build native images and deploy locally
+./scripts/build-images.sh --local
+./scripts/deploy.sh
+
+# 4. Verify topology & cross-node placement
+python3 tests/fault/verify_topology.py
 ```
 
 ---
@@ -198,10 +236,13 @@ The grading rubric requires randomly taking one Raspberry Pi offline and demonst
 1. Identify the pods running on each Pi:
    ```bash
    kubectl get pods -n werewolf -o wide
+   python3 tests/fault/verify_topology.py
    ```
-2. Start streaming cluster events and pod status in a terminal:
+2. Run the automated fault test monitor:
    ```bash
-   kubectl get pods -n werewolf -o wide -w
+   ./tests/fault/test_fault_recovery.sh
+   # Or run live watch:
+   # ./scripts/fault-test.sh
    ```
 3. **Pull the Failure Trigger:** Have the instructor randomly pick a Raspberry Pi (e.g., `pi-02` running `gamemaster`) and physically disconnect its Ethernet cable (or pull the power plug).
 4. **Observe Self-Healing:**

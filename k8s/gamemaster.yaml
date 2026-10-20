@@ -32,6 +32,7 @@ spec:
       - name: gamemaster
         image: werewolf/gamemaster:v1.0
         imagePullPolicy: IfNotPresent
+        # [TODO-01-C]: Sync with Role 4 (Nantaporn): GM port 8000, REDIS_URL, Redis TIME authority, memory <= 160Mi
         ports:
         - containerPort: 8000
         env:
@@ -60,6 +61,12 @@ spec:
             port: 8000
           initialDelaySeconds: 3
           periodSeconds: 3
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service
