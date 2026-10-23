@@ -1,5 +1,7 @@
 # Test & tooling dependencies (not shipped in any container image)
 # Usage: pip install -r requirements-dev.txt
+-r services/gateway/requirements.txt
+-r services/lobby/requirements.txt
 -r services/gamemaster/requirements.txt
 -r services/chat/requirements.txt
 pytest>=8.0
