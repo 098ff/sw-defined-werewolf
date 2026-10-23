@@ -32,6 +32,7 @@ spec:
       - name: frontend
         image: werewolf/frontend:v1.0
         imagePullPolicy: IfNotPresent
+        # [TODO-01-A]: Sync with Role 2 (Khanapong): Nginx port 80, static React build, health endpoints
         ports:
         - containerPort: 80
         resources:
@@ -47,6 +48,12 @@ spec:
             port: 80
           initialDelaySeconds: 2
           periodSeconds: 3
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service

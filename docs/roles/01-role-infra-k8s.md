@@ -171,3 +171,40 @@ Strictly adhere to docs/roles/01-role-infra-k8s.md and docs/roles/00-agent-syste
 Make sure every deployment sets Downward API env vars (POD_NAME, NODE_NAME), memory limits <= 160MiB,
 readiness probes, and proper Pod Anti-Affinity.
 ```
+
+---
+
+## 6. Service Integration Checklist (TODO-01)
+
+Search tag: `TODO-01` across the repository to locate all cross-service integration touchpoints.
+When teammates finish their microservices and prepare to integrate on Kubernetes, Chanatda Konchom (Role 1) must verify this checklist:
+
+### [TODO-01-A] Integration with Khanapong Kamchoom (Role 2: Gateway & Frontend)
+- [ ] **Gateway Upstream URLs:** Verify that `gateway` reads internal service URLs from environment variables matching `k8s/gateway.yaml`:
+  - `LOBBY_URL=http://lobby:8000`
+  - `GAMEMASTER_URL=http://gamemaster:8000`
+  - `CHAT_URL=http://chat:8000`
+  - `FRONTEND_URL=http://frontend:80`
+- [ ] **Trace Propagation & Downward API:** Verify that `gateway` generates `X-Request-ID`, reads `POD_NAME` & `NODE_NAME` via Downward API, prepends its hop, and collects upstream backend trace entries.
+- [ ] **Frontend Routing & Health Probes:** Confirm `frontend` Nginx listens on port `80`, serves static React build, and responds with HTTP 200 on `/health/ready` and `/health/live`.
+- [ ] **UI Trace HUD:** Verify that the frontend UI contains the collapsible System Trace HUD displaying `gateway (node) -> handler (node)` for the on-site grading demo.
+- [ ] **ARM64 Dockerfile:** Confirm both `services/gateway/Dockerfile` and `services/frontend/Dockerfile` build cleanly on `linux/arm64`.
+
+### [TODO-01-B] Integration with Thanyaporn Rattanacharoentham (Role 3: Lobby Service)
+- [ ] **Lobby Port & Endpoints:** Verify that `lobby` container exposes port `8000` and serves `/health/ready` and `/health/live` returning HTTP 200.
+- [ ] **Environment Variables:** Confirm `lobby` handles `REDIS_URL=redis://redis:6379`, `STATE_STORE_BACKEND=redis`, and `GAMEMASTER_URL=http://gamemaster:8000`.
+- [ ] **Downward API Trace:** Verify `lobby` reads `os.getenv("POD_NAME")` and `os.getenv("NODE_NAME")` and returns them in the response envelope trace array.
+- [ ] **Memory Limit Compliance:** Confirm that running Lobby under load consumes $< 160\text{ MiB}$ RAM to avoid OOM panics on the 1GB Raspberry Pis.
+
+### [TODO-01-C] Integration with Nantaporn Phuaphanbun (Role 4: GameMaster Service)
+- [ ] **GameMaster Port & Endpoints:** Verify that `gamemaster` container exposes port `8000` and serves `/health/ready` and `/health/live` returning HTTP 200.
+- [ ] **Environment Variables:** Confirm `gamemaster` handles `REDIS_URL=redis://redis:6379` and `STATE_STORE_BACKEND=redis`.
+- [ ] **Redis TIME Authority:** Confirm GameMaster calculates phase durations (`45s` night, `60s` day) strictly using Redis `TIME` (avoiding host node clock drift among the 5 Pis).
+- [ ] **Memory Limit Compliance:** Confirm that rule evaluation and state serialization stay well under $160\text{ MiB}$ RAM.
+
+### [TODO-01-D] Integration with Chayut Archamongkol (Role 5: Chat, StateStore & Docker Compose / QA)
+- [ ] **Chat Port & Endpoints:** Verify that `chat` container exposes port `8000` and serves `/health/ready` and `/health/live` returning HTTP 200.
+- [ ] **Redis Data Persistence & Volume:** Confirm that Redis data directory `/data` persists to `/var/lib/werewolf-redis` on the Control-Plane Master VM.
+- [ ] **Docker Compose vs K8s Parity:** Cross-check environment variable names between `docker-compose.dev.yml` and `k8s/*.yaml` to prevent divergence.
+- [ ] **Pre-Demo State Flush:** Coordinate on `./scripts/reset-demo.sh` to ensure Redis FLUSHALL cleanly resets state between test iterations without breaking active pods.
+

@@ -39,6 +39,17 @@ spec:
           limits:
             memory: "512Mi"
             cpu: "500m"
+        readinessProbe:
+          exec:
+            command: ["redis-cli", "ping"]
+          initialDelaySeconds: 3
+          periodSeconds: 3
+        livenessProbe:
+          exec:
+            command: ["redis-cli", "ping"]
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        # [TODO-01-D]: Sync with Role 5 (Chayut): Redis AOF persistence path /var/lib/werewolf-redis
         volumeMounts:
         - name: redis-data
           mountPath: /data
