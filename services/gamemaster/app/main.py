@@ -93,14 +93,10 @@ async def store_error_handler(request: Request, exc: Exception):
 
 async def server_now() -> int:
     """Authoritative clock: Redis TIME so every pod agrees, local clock when running in-memory."""
-    if isinstance(store, RedisStateStore):
-        try:
-            r = await store._get_redis()
-            seconds, _ = await r.time()
-            return int(seconds)
-        except Exception:
-            pass
-    return int(time.time())
+    try:
+        return await store.get_server_time()
+    except Exception:
+        return int(time.time())
 
 
 async def authenticate(room_id: str, authorization: Optional[str]) -> str:
