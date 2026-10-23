@@ -274,12 +274,14 @@ class StateStore(ABC):
 
 #### `POST /api/game/rooms/{room_id}/night-actions`
 - **Auth:** Bearer Token
-- **Action Values by Role:**
+- **Action Values by Role** (exact strings; anything else returns `403 FORBIDDEN_ROLE`):
   | Role | Canonical `action` Value | Target Constraint |
   |---|---|---|
   | `WEREWOLF` | `"WEREWOLF_KILL"` | Living player ID (cannot target self). |
   | `DOCTOR` | `"DOCTOR_PROTECT"` | Living player ID (permitted to target self). |
   | `SEER` | `"SEER_CHECK"` | Living player ID (cannot target self). |
+
+  `VILLAGER` has no night action.
 - **Request Body (Example - Seer Inspect):**
   ```json
   {
@@ -363,6 +365,15 @@ class StateStore(ABC):
 ---
 
 ### 5.4 Internal & Health Endpoints
+
+#### `POST /api/demo/rooms/{room_id}/force-next`
+- **Caller:** Demo operator only (routed by `gateway` to `gamemaster`).
+- **Auth:** Header `X-Demo-Secret: <DEMO_SECRET>`; enabled only when `DEMO_MODE=true`. Otherwise `403 FORBIDDEN`.
+- **Behavior:** Immediately advances the room to its next phase (resolving the current one) instead of waiting for the timer.
+- **Response `data`:**
+  ```json
+  { "status": "ADVANCED", "phase": "DAY", "phase_version": 15, "announcement": "Dawn breaks. ..." }
+  ```
 
 #### `POST /internal/rooms/{room_id}/initialize`
 - **Caller:** `lobby` Service only.

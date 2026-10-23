@@ -43,10 +43,17 @@ spec:
         operator: "Exists"
         effect: "NoExecute"
         tolerationSeconds: 10
+      - key: "node-role.kubernetes.io/control-plane"
+        operator: "Exists"
+        effect: "NoSchedule"
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+        effect: "NoSchedule"
       containers:
       - name: gateway
         image: werewolf/gateway:v1.0
         imagePullPolicy: IfNotPresent
+        # [TODO-01-A]: Sync with Role 2 (Khanapong): Gateway port, Downward API, upstream URLs
         ports:
         - containerPort: 8000
         env:

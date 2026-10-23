@@ -32,6 +32,7 @@ spec:
       - name: lobby
         image: werewolf/lobby:v1.0
         imagePullPolicy: IfNotPresent
+        # [TODO-01-B]: Sync with Role 3 (Thanyaporn): Lobby port 8000, GAMEMASTER_URL, REDIS_URL, memory <= 160Mi
         ports:
         - containerPort: 8000
         env:
@@ -62,6 +63,12 @@ spec:
             port: 8000
           initialDelaySeconds: 3
           periodSeconds: 3
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service
