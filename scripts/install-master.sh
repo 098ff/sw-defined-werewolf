@@ -57,9 +57,12 @@ chmod 644 /etc/rancher/k3s/k3s.yaml
 
 # 6. Wait for Node to be Ready and Label Master
 echo "[5/6] Waiting for Master Node to reach Ready state..."
-sleep 5
-MASTER_NODE_NAME=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
-kubectl label node "$MASTER_NODE_NAME" node-role=control-plane --overwrite
+kubectl wait --for=condition=Ready node --all --timeout=60s 2>/dev/null || sleep 5
+MASTER_NODE_NAME=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+if [ -n "$MASTER_NODE_NAME" ]; then
+    kubectl label node "$MASTER_NODE_NAME" node-role=control-plane --overwrite
+    echo "Labeled master node: $MASTER_NODE_NAME -> node-role=control-plane"
+fi
 
 # 7. Retrieve Cluster Join Token
 NODE_TOKEN=$(cat /var/lib/rancher/k3s/server/node-token)

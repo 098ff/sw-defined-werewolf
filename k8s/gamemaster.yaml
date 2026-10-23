@@ -48,6 +48,10 @@ spec:
           value: "redis"
         - name: REDIS_URL
           value: "redis://redis:6379"
+        - name: DEMO_MODE
+          value: "true"
+        - name: DEMO_SECRET
+          value: "sds-werewolf-demo-secret"
         resources:
           requests:
             memory: "64Mi"

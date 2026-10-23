@@ -123,5 +123,13 @@ class TestManifestCompliance(unittest.TestCase):
         self.assertIn("IPAddressPool", content)
         self.assertIn("L2Advertisement", content)
 
+    def test_gamemaster_demo_mode_configured(self):
+        # Closes Issue #8: ensure DEMO_MODE and DEMO_SECRET are passed to gamemaster
+        content = read_manifest("gamemaster.yaml")
+        self.assertIn("name: DEMO_MODE", content)
+        self.assertIn('value: "true"', content)
+        self.assertIn("name: DEMO_SECRET", content)
+        self.assertIn('value: "sds-werewolf-demo-secret"', content)
+
 if __name__ == "__main__":
     unittest.main()

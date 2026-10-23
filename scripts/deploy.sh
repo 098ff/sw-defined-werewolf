@@ -36,17 +36,25 @@ kubectl apply -f "$K8S_DIR/redis.yaml"
 echo "Waiting for Redis to become Ready..."
 kubectl rollout status -n werewolf deployment/redis --timeout=60s
 
-# 3. Deploy Gateway (with Anti-Affinity constraints)
-echo "[3/6] Deploying Gateway (Entrypoint Proxy)..."
-kubectl apply -f "$K8S_DIR/gateway.yaml"
-
-# 4. Deploy Handlers (Frontend, Lobby, GameMaster, Chat)
-echo "[4/6] Deploying Handler Services across Pi Workers..."
+# 3. Deploy Handlers (Frontend, Lobby, GameMaster, Chat)
+echo "[3/6] Deploying Handler Services across Pi Workers..."
 kubectl apply -f "$K8S_DIR/frontend.yaml"
 kubectl apply -f "$K8S_DIR/lobby.yaml"
 kubectl apply -f "$K8S_DIR/gamemaster.yaml"
 kubectl apply -f "$K8S_DIR/chat.yaml"
 kubectl apply -f "$K8S_DIR/services.yaml"
+
+echo "Waiting for Handlers to become Ready across Pi nodes..."
+kubectl rollout status -n werewolf deployment/frontend --timeout=90s
+kubectl rollout status -n werewolf deployment/lobby --timeout=90s
+kubectl rollout status -n werewolf deployment/gamemaster --timeout=90s
+kubectl rollout status -n werewolf deployment/chat --timeout=90s
+
+# 4. Deploy Gateway (Scheduled strictly on a remaining node away from Handlers)
+echo "[4/6] Deploying Gateway (Entrypoint Proxy with Pod Anti-Affinity)..."
+kubectl apply -f "$K8S_DIR/gateway.yaml"
+echo "Waiting for Gateway to become Ready..."
+kubectl rollout status -n werewolf deployment/gateway --timeout=90s
 
 # 5. Apply MetalLB LoadBalancer Config
 echo "[5/6] Checking MetalLB LoadBalancer Configuration..."
@@ -64,13 +72,10 @@ else
     echo "Notice: MetalLB CRDs not ready; skipped metallb-config.yaml application."
 fi
 
-# 6. Wait for all Deployments to Roll Out
-echo "[6/6] Verifying Pod Readiness across all Nodes..."
-kubectl rollout status -n werewolf deployment/gateway --timeout=90s
-kubectl rollout status -n werewolf deployment/frontend --timeout=90s
-kubectl rollout status -n werewolf deployment/lobby --timeout=90s
-kubectl rollout status -n werewolf deployment/gamemaster --timeout=90s
-kubectl rollout status -n werewolf deployment/chat --timeout=90s
+# 6. Verify Pod Readiness across all Nodes
+echo "[6/6] Final Verification of Workload Rollout across all Nodes..."
+kubectl rollout status -n werewolf deployment/redis --timeout=30s
+kubectl rollout status -n werewolf deployment/gateway --timeout=30s
 
 echo ""
 echo "=========================================================="

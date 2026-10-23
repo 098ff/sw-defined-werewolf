@@ -25,7 +25,7 @@ echo "=========================================================="
 echo " Joining 5x Raspberry Pi Workers to Master ($MASTER_IP)"
 echo "=========================================================="
 
-JOIN_CMD="curl -sfL https://get.k3s.io | K3S_URL=https://$MASTER_IP:6443 K3S_TOKEN=\"$NODE_TOKEN\" sh -"
+JOIN_CMD="curl -sfL https://get.k3s.io | sudo K3S_URL=https://$MASTER_IP:6443 K3S_TOKEN=\"$NODE_TOKEN\" sh -"
 
 # 2. Iterate through worker IPs and attempt SSH installation
 for IP in "${WORKER_IPS[@]}"; do
@@ -45,9 +45,9 @@ echo ""
 echo "Waiting 15 seconds for nodes to register with the master..."
 sleep 15
 
-# 3. Label Pi Worker Nodes
+# 3. Label Pi Worker Nodes (select nodes that are not control-plane)
 echo "Applying 'node-role=pi' labels to worker nodes..."
-PI_NODES=$(kubectl get nodes --no-headers -o custom-columns=NAME:.metadata.name | grep -v "$(hostname)" || true)
+PI_NODES=$(kubectl get nodes -l '!node-role.kubernetes.io/control-plane,!node-role.kubernetes.io/master,!node-role=control-plane' -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || true)
 
 for NODE in $PI_NODES; do
     kubectl label node "$NODE" node-role=pi --overwrite || true
