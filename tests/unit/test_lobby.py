@@ -69,7 +69,7 @@ async def test_create_join_and_public_view(env):
     client, store, _, calls = env
     created = await client.post("/api/lobby/rooms", json={"name": "  Alice  "})
     host = created.json()["data"]
-    assert re.fullmatch("[0-9]{4}", host["room_id"])
+    assert re.fullmatch("[A-Z]{4}", host["room_id"])
     assert host["is_host"] is True
     assert len(host["player_token"]) >= 32
     assert re.fullmatch("req-[a-f0-9]{32}", created.json()["request_id"])
@@ -124,19 +124,19 @@ async def test_malformed_json_and_unmatched_route(env):
 @pytest.mark.asyncio
 async def test_room_code_collision_retries_without_overwriting(env, monkeypatch):
     client, store, _, _ = env
-    codes = iter(["0123", "0123", "4567"])
+    codes = iter(["WOLF", "WOLF", "MOON"])
     monkeypatch.setattr(lobby, "generate_room_code", lambda: next(codes))
     first, _ = await room_with_players(client)
     second, _ = await room_with_players(client)
-    assert first["room_id"] == "0123"
-    assert second["room_id"] == "4567"
-    assert (await store.get_room("0123"))["host_player_id"] == first["player_id"]
+    assert first["room_id"] == "WOLF"
+    assert second["room_id"] == "MOON"
+    assert (await store.get_room("WOLF"))["host_player_id"] == first["player_id"]
 
 
 @pytest.mark.asyncio
 async def test_room_code_collision_exhaustion(env, monkeypatch):
     client, _, _, _ = env
-    monkeypatch.setattr(lobby, "generate_room_code", lambda: "0123")
+    monkeypatch.setattr(lobby, "generate_room_code", lambda: "WOLF")
     await room_with_players(client)
     assert_error(await client.post("/api/lobby/rooms", json={"name": "Other"}), 503, "SERVICE_UNAVAILABLE")
 

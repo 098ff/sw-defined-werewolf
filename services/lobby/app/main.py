@@ -36,7 +36,7 @@ class LobbyError(Exception):
 
 
 def generate_room_code() -> str:
-    return "".join(secrets.choice(string.digits) for _ in range(4))
+    return "".join(secrets.choice(string.ascii_uppercase) for _ in range(4))
 
 
 def create_app(

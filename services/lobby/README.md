@@ -4,7 +4,7 @@ Handles room creation, joining, player lists, and host-authorized game starts. G
 
 ## Features
 
-- Creates a four-digit room code, such as `"0538"`, and makes the creator the host.
+- Creates a 4-character uppercase room code, such as `"WOLF"`, and makes the creator the host.
 - Issues a `player_token` to each player for viewing the room and starting the game.
 - Trims player names and requires 2–20 characters. Names must be unique within the room, ignoring case.
 - Allows up to 6 players, including simultaneous joins, and accepts joins only during `WAITING`.
@@ -53,7 +53,7 @@ This mode does not require Redis. Data is stored in memory and disappears when L
 | `GET` | `/health/live` | Checks whether Lobby can respond to requests. | None |
 | `GET` | `/health/ready` | Checks whether Lobby can reach storage. | None |
 
-`{room_id}` is the code returned when creating a room, such as `0538`. It is stored as a string to preserve leading zeros.
+`{room_id}` is the 4-character uppercase code returned when creating a room, such as `WOLF`.
 
 ### Create a room
 
@@ -67,7 +67,7 @@ On success, the response contains these fields inside `data`:
 
 ```json
 {
-  "room_id": "0538",
+  "room_id": "WOLF",
   "player_id": "p-...",
   "player_token": "...",
   "is_host": true
@@ -79,7 +79,7 @@ Share `room_id` with other players so they can join. Keep each player's `player_
 ### Join a room
 
 ```bash
-curl -X POST 'http://localhost:8001/api/lobby/rooms/0538/join' \
+curl -X POST 'http://localhost:8001/api/lobby/rooms/WOLF/join' \
   -H 'Content-Type: application/json' \
   -d '{"name":"Bob"}'
 ```
@@ -91,7 +91,7 @@ Returns the same fields as room creation, with the new player's own `player_id` 
 Replace the room code and `YOUR_PLAYER_TOKEN` with actual values. Any member of the room can use their token:
 
 ```bash
-curl 'http://localhost:8001/api/lobby/rooms/0538' \
+curl 'http://localhost:8001/api/lobby/rooms/WOLF' \
   -H 'Authorization: Bearer YOUR_PLAYER_TOKEN'
 ```
 
@@ -102,7 +102,7 @@ Returns `room_id`, `phase`, `host_player_id`, and `players`. Each player entry i
 Once the room has 4–6 players, replace `YOUR_HOST_TOKEN` with the host's token. No request body is needed:
 
 ```bash
-curl -X POST 'http://localhost:8001/api/lobby/rooms/0538/start' \
+curl -X POST 'http://localhost:8001/api/lobby/rooms/WOLF/start' \
   -H 'Authorization: Bearer YOUR_HOST_TOKEN'
 ```
 
