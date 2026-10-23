@@ -81,7 +81,22 @@ def test_routes_to_correct_backend(make_client):
     client.post("/api/lobby/rooms", json={"name": "Alice"})
     client.get("/api/game/rooms/WOLF/state")
     client.get("/api/chat/rooms/WOLF/messages")
-    assert hits == [gateway.LOBBY_URL, gateway.GAMEMASTER_URL, gateway.CHAT_URL]
+    client.post("/api/demo/rooms/WOLF/force-next")
+    assert hits == [gateway.LOBBY_URL, gateway.GAMEMASTER_URL, gateway.CHAT_URL, gateway.GAMEMASTER_URL]
+
+
+def test_demo_route_forwards_secret_and_traces_gamemaster(make_client):
+    seen = {}
+    def handler(req):
+        seen["path"] = req.url.path
+        seen["secret"] = req.headers.get("X-Demo-Secret")
+        return httpx.Response(200, json={"ok": True, "data": {"status": "ADVANCED", "phase": "DAY"}, "trace": [GM_HOP]})
+    r = make_client(handler).post("/api/demo/rooms/WOLF/force-next", headers={"X-Demo-Secret": "test-secret"})
+    body = r.json()
+    assert r.status_code == 200
+    assert seen == {"path": "/api/demo/rooms/WOLF/force-next", "secret": "test-secret"}
+    assert body["data"]["status"] == "ADVANCED"
+    assert [h["service"] for h in body["trace"]] == ["gateway", "gamemaster"]
 
 
 def test_trace_from_header_when_body_has_none(make_client):

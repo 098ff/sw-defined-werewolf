@@ -34,8 +34,10 @@ API_ROUTES = {
     "lobby": LOBBY_URL,
     "game": GAMEMASTER_URL,
     "chat": CHAT_URL,
+    # Demo phase acceleration (force-next); GameMaster guards it with DEMO_MODE + X-Demo-Secret.
+    "demo": GAMEMASTER_URL,
 }
-API_SERVICE_NAMES = {"lobby": "lobby", "game": "gamemaster", "chat": "chat"}
+API_SERVICE_NAMES = {"lobby": "lobby", "game": "gamemaster", "chat": "chat", "demo": "gamemaster"}
 
 # Hop-by-hop headers (RFC 7230 §6.1) plus headers httpx/uvicorn recompute.
 HOP_BY_HOP = {
