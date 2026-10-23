@@ -87,7 +87,8 @@ From the Master VM, run the automated worker join script:
 
 Or run the join command directly on each Raspberry Pi (`pi-01` through `pi-05`):
 ```bash
-curl -sfL https://get.k3s.io | K3S_URL=https://192.168.1.100:6443 \
+curl -sfL https://get.k3s.io | sudo INSTALL_K3S_VERSION="v1.28.8+k3s1" \
+  K3S_URL=https://192.168.1.100:6443 \
   K3S_TOKEN="<NODE_TOKEN_FROM_MASTER>" sh -
 ```
 

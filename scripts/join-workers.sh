@@ -8,6 +8,7 @@ set -e
 
 MASTER_IP="${2:-192.168.1.100}"
 PI_USER="${PI_USER:-pi}"
+K3S_VERSION="${K3S_VERSION:-v1.28.8+k3s1}"
 WORKER_IPS=("192.168.1.101" "192.168.1.102" "192.168.1.103" "192.168.1.104" "192.168.1.105")
 
 # 1. Resolve Token
@@ -25,7 +26,7 @@ echo "=========================================================="
 echo " Joining 5x Raspberry Pi Workers to Master ($MASTER_IP)"
 echo "=========================================================="
 
-JOIN_CMD="curl -sfL https://get.k3s.io | sudo K3S_URL=https://$MASTER_IP:6443 K3S_TOKEN=\"$NODE_TOKEN\" sh -"
+JOIN_CMD="curl -sfL https://get.k3s.io | sudo INSTALL_K3S_VERSION=\"$K3S_VERSION\" K3S_URL=https://$MASTER_IP:6443 K3S_TOKEN=\"$NODE_TOKEN\" sh -"
 
 # 2. Iterate through worker IPs and attempt SSH installation
 for IP in "${WORKER_IPS[@]}"; do
