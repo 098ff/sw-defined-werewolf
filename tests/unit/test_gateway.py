@@ -150,6 +150,28 @@ def test_unknown_api_prefix_returns_404_envelope(make_client):
     assert r.status_code == 404 and r.json()["ok"] is False
 
 
+def test_api_service_without_subpath_routes_to_backend(make_client):
+    seen = {}
+    def handler(req):
+        seen["url"] = str(req.url)
+        return httpx.Response(404, json={"ok": False, "error": {"code": "NOT_FOUND", "message": "Not found"}})
+    r = make_client(handler).get("/api/lobby")
+    assert seen["url"] == f"{gateway.LOBBY_URL}/api/lobby"
+    assert r.status_code == 404
+    assert r.json()["ok"] is False
+
+
+def test_api_root_or_unknown_returns_404_envelope_not_frontend(make_client):
+    r = make_client(lambda req: httpx.Response(200, content=b"frontend HTML")).get("/api")
+    assert r.status_code == 404
+    assert r.json()["ok"] is False
+    assert r.json()["error"]["code"] == "NOT_FOUND"
+
+    r2 = make_client(lambda req: httpx.Response(200, content=b"frontend HTML")).get("/api/nonexistent")
+    assert r2.status_code == 404
+    assert r2.json()["ok"] is False
+
+
 def test_static_assets_pass_through_untouched(make_client):
     seen = {}
     def handler(req):

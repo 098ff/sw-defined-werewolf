@@ -189,8 +189,9 @@ async def health():
     return envelope_response(200, request_id, [gateway_hop()], data={"status": "UP", "service": SERVICE_NAME})
 
 
+@app.api_route("/api/{service}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 @app.api_route("/api/{service}/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
-async def route_api(request: Request, service: str, path: str):
+async def route_api(request: Request, service: str, path: str = ""):
     target = API_ROUTES.get(service)
     if target is None:
         return envelope_response(
@@ -204,6 +205,11 @@ async def route_api(request: Request, service: str, path: str):
 async def route_frontend(request: Request, path: str):
     """Static SPA passthrough. No envelope: HTML/JS/CSS bytes go through untouched."""
     request_id = new_request_id()
+    if path == "api" or path.startswith("api/"):
+        return envelope_response(
+            404, request_id, [gateway_hop()],
+            error={"code": "NOT_FOUND", "message": f"No API endpoint found for '/{path}'"},
+        )
     url = f"{FRONTEND_URL}{request.url.path}"
     if request.url.query:
         url += f"?{request.url.query}"

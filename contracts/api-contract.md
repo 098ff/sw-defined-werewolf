@@ -274,7 +274,15 @@ class StateStore(ABC):
 
 #### `POST /api/game/rooms/{room_id}/night-actions`
 - **Auth:** Bearer Token
-- **Request Body:**
+- **Action Values by Role** (exact strings; anything else returns `403 FORBIDDEN_ROLE`):
+  | Role | Canonical `action` Value | Target Constraint |
+  |---|---|---|
+  | `WEREWOLF` | `"WEREWOLF_KILL"` | Living player ID (cannot target self). |
+  | `DOCTOR` | `"DOCTOR_PROTECT"` | Living player ID (permitted to target self). |
+  | `SEER` | `"SEER_CHECK"` | Living player ID (cannot target self). |
+
+  `VILLAGER` has no night action.
+- **Request Body (Example - Seer Inspect):**
   ```json
   {
     "phase_version": 14,
@@ -290,15 +298,6 @@ class StateStore(ABC):
     "target_id": "p1"
   }
   ```
-- **Canonical `action` values** (exact strings; one per role, anything else returns `403 FORBIDDEN_ROLE`):
-
-  | Role | `action` | Target rule |
-  |---|---|---|
-  | `WEREWOLF` | `WEREWOLF_KILL` | Living player, not self |
-  | `DOCTOR` | `DOCTOR_PROTECT` | Living player, self allowed |
-  | `SEER` | `SEER_CHECK` | Living player, not self |
-
-  `VILLAGER` has no night action.
 
 #### `POST /api/game/rooms/{room_id}/vote`
 - **Auth:** Bearer Token
