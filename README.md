@@ -183,6 +183,22 @@ python3 -m unittest tests/unit/test_manifest_compliance.py
 python3 tests/fault/verify_topology.py
 ```
 
+### 4.4 Application Test Suite (Unit + End-to-End)
+Unit tests cover every service and both StateStore backends (in-memory and Redis via fakeredis), so no running Redis is needed:
+
+```bash
+pip install -r requirements-dev.txt
+python3 -m pytest -q
+```
+
+The E2E script plays a full 5-player game through the gateway and asserts the standard envelope, chat channel permissions, role hiding and that every request touches >= 2 containers:
+
+```bash
+./scripts/local-dev.sh up
+python3 tests/e2e/run_game_flow.py                              # docker compose (http://localhost:8080)
+python3 tests/e2e/run_game_flow.py --base-url http://192.168.1.240   # K3s cluster via MetalLB
+```
+
 ---
 
 ## 5. Live Demo Guide & Cross-Node Trace Validation
