@@ -274,7 +274,13 @@ class StateStore(ABC):
 
 #### `POST /api/game/rooms/{room_id}/night-actions`
 - **Auth:** Bearer Token
-- **Request Body:**
+- **Action Values by Role:**
+  | Role | Canonical `action` Value | Target Constraint |
+  |---|---|---|
+  | `WEREWOLF` | `"WEREWOLF_KILL"` | Living player ID (cannot target self). |
+  | `DOCTOR` | `"DOCTOR_PROTECT"` | Living player ID (permitted to target self). |
+  | `SEER` | `"SEER_CHECK"` | Living player ID (cannot target self). |
+- **Request Body (Example - Seer Inspect):**
   ```json
   {
     "phase_version": 14,
