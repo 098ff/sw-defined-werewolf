@@ -35,6 +35,10 @@ class LobbyError(Exception):
         self.message = message
 
 
+# Minimum seconds between heartbeat writes for the same player (lobby polls every 2 s).
+HEARTBEAT_WRITE_INTERVAL = 5
+
+
 def generate_room_code() -> str:
     return "".join(secrets.choice(string.ascii_uppercase) for _ in range(4))
 
@@ -43,6 +47,7 @@ def create_app(
     store: StateStore | None = None,
     gamemaster_client: httpx.AsyncClient | None = None,
     gamemaster_url: str | None = None,
+    presence_timeout: int | None = None,
 ) -> FastAPI:
     """Allow isolated tests to inject storage and an HTTP mock without live services."""
     if store is None:
@@ -55,6 +60,10 @@ def create_app(
             raise ValueError("STATE_STORE_BACKEND must be redis or in_memory")
 
     gm_url = (gamemaster_url or os.getenv("GAMEMASTER_URL", "http://gamemaster:8000")).rstrip("/")
+    # Waiting-room players who stop polling (tab closed, crash, Wi-Fi drop) are dropped after this long.
+    # The lobby page polls every 2 s, so a browser refresh comes back well within the window.
+    timeout = presence_timeout if presence_timeout is not None else int(
+        os.getenv("LOBBY_PRESENCE_TIMEOUT_SECONDS", "20"))
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -135,6 +144,48 @@ def create_app(
             raise LobbyError(401, "INVALID_TOKEN", "Player is no longer in this room.")
         return session["player_id"], room
 
+    def drop_player(state, player_id):
+        state["players"].pop(player_id, None)
+        # Hand host to the earliest remaining joiner so the room can still be started.
+        if state["host_player_id"] == player_id and state["players"]:
+            new_host = next(iter(state["players"]))
+            state["host_player_id"] = new_host
+            state["players"][new_host]["is_host"] = True
+
+    def is_stale(player, now):
+        return now - player.get("last_seen", now) > timeout
+
+    def prune_stale(state, now):
+        """Drop waiting-room players not seen within `timeout` seconds of server time."""
+        if state["phase"] != "WAITING":
+            return
+        for pid, player in list(state["players"].items()):
+            player.setdefault("last_seen", now)  # Rooms created before presence tracking.
+            if is_stale(player, now):
+                drop_player(state, pid)
+
+    def needs_presence_write(room, player_id, now):
+        # Throttle heartbeat writes to one every few seconds per player, unless someone is due for removal.
+        me = room["players"].get(player_id, {})
+        return (
+            now - me.get("last_seen", 0) >= HEARTBEAT_WRITE_INTERVAL
+            or any("last_seen" not in p or is_stale(p, now) for p in room["players"].values())
+        )
+
+    async def touch_and_prune(room_id, player_id):
+        now = await store.get_server_time()
+
+        def heartbeat(state):
+            if state["phase"] == "WAITING" and player_id in state["players"]:
+                state["players"][player_id]["last_seen"] = now
+                prune_stale(state, now)
+            return state
+
+        try:
+            return await store.update_room(room_id, heartbeat)
+        except ValueError:
+            raise LobbyError(404, "ROOM_NOT_FOUND", "Room not found.") from None
+
     @app.get("/health/live")
     async def live(request: Request):
         return response(request, {"status": "UP", "service": "lobby"})
@@ -149,6 +200,7 @@ def create_app(
     async def create_room(payload: PlayerRequest, request: Request):
         player_id = f"p-{secrets.token_hex(16)}"
         token = secrets.token_urlsafe(32)
+        now = await store.get_server_time()
         for _ in range(10):
             room_id = generate_room_code()
             initial_state = {
@@ -158,7 +210,7 @@ def create_app(
                 "host_player_id": player_id,
                 "players": {player_id: {
                     "player_id": player_id, "name": payload.name, "role": None,
-                    "alive": True, "is_host": True,
+                    "alive": True, "is_host": True, "last_seen": now,
                 }},
                 "night_actions": {
                     "wolf_votes": {}, "doctor_target": None, "seer_target": None,
@@ -181,18 +233,21 @@ def create_app(
         await require_room(room_id)
         player_id = f"p-{secrets.token_hex(16)}"
         token = secrets.token_urlsafe(32)
+        now = await store.get_server_time()
 
         def add_player(state):
             # CAS can re-run this function: validate against the current state each time.
             if state["phase"] != "WAITING":
                 raise LobbyError(409, "GAME_ALREADY_STARTED", "Room is already in progress.")
+            # Free seats held by players who closed their tab before checking capacity.
+            prune_stale(state, now)
             if len(state["players"]) >= 6:
                 raise LobbyError(409, "ROOM_FULL", "Room reached maximum capacity of 6 players.")
             if any(p["name"].casefold() == payload.name.casefold() for p in state["players"].values()):
                 raise LobbyError(400, "INVALID_REQUEST", "Player name already in use.")
             state["players"][player_id] = {
                 "player_id": player_id, "name": payload.name, "role": None,
-                "alive": True, "is_host": False,
+                "alive": True, "is_host": False, "last_seen": now,
             }
             return state
 
@@ -209,7 +264,10 @@ def create_app(
 
     @app.get("/api/lobby/rooms/{room_id}")
     async def get_lobby_state(room_id: str, request: Request):
-        _, room = await authenticate(request, room_id)
+        player_id, room = await authenticate(request, room_id)
+        # The lobby page's 2 s poll doubles as a heartbeat.
+        if room["phase"] == "WAITING" and needs_presence_write(room, player_id, await store.get_server_time()):
+            room = await touch_and_prune(room_id, player_id)
         return response(request, {
             "room_id": room_id, "phase": room["phase"],
             "host_player_id": room["host_player_id"],
@@ -220,6 +278,9 @@ def create_app(
     @app.post("/api/lobby/rooms/{room_id}/start")
     async def start_game(room_id: str, request: Request):
         player_id, room = await authenticate(request, room_id)
+        if room["phase"] == "WAITING":
+            # Never start a game counting players who already closed their tab.
+            room = await touch_and_prune(room_id, player_id)
         if player_id != room["host_player_id"]:
             raise LobbyError(403, "HOST_ONLY", "Only room host can start the game.")
         if room["phase"] != "WAITING":
@@ -266,12 +327,7 @@ def create_app(
             # Roles are assigned once the game starts; removing a player then would skew win checks.
             if state["phase"] != "WAITING":
                 raise LobbyError(409, "GAME_ALREADY_STARTED", "Cannot leave after the game has started.")
-            state["players"].pop(player_id, None)
-            # Hand host to the earliest remaining joiner so the room can still be started.
-            if state["host_player_id"] == player_id and state["players"]:
-                new_host = next(iter(state["players"]))
-                state["host_player_id"] = new_host
-                state["players"][new_host]["is_host"] = True
+            drop_player(state, player_id)
             return state
 
         try:

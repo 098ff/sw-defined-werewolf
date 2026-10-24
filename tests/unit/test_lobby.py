@@ -422,3 +422,129 @@ async def test_leave_requires_valid_token(env):
     path = f"/api/lobby/rooms/{host['room_id']}/leave"
     assert_error(await client.post(path), 401, "MISSING_TOKEN")
     assert_error(await client.post(path, headers=auth(other)), 401, "INVALID_TOKEN")
+
+
+# --- Presence timeout: players who stop polling (tab closed, crash, Wi-Fi drop) are dropped ---
+
+def fake_clock(store, start=1_000_000):
+    clock = {"now": start}
+
+    async def now():
+        return clock["now"]
+
+    store.get_server_time = now
+    return clock
+
+
+async def poll(client, player):
+    return await client.get(f"/api/lobby/rooms/{player['room_id']}", headers=auth(player))
+
+
+def names(response):
+    return [p["name"] for p in response.json()["data"]["players"]]
+
+
+@pytest.mark.asyncio
+async def test_silent_player_is_dropped_after_timeout(env):
+    client, store, _, _ = env
+    clock = fake_clock(store)
+    host, players = await room_with_players(client, 3)
+    for _ in range(3):  # Host and Player 1 keep polling; Player 2 closed the tab.
+        clock["now"] += 8
+        assert (await poll(client, host)).status_code == 200
+        assert (await poll(client, players[1])).status_code == 200
+    listed = await poll(client, host)
+    assert names(listed) == ["Host", "Player 1"]
+    assert_error(await poll(client, players[2]), 401, "INVALID_TOKEN")
+
+
+@pytest.mark.asyncio
+async def test_silent_host_hands_host_to_next_player(env):
+    client, store, _, _ = env
+    clock = fake_clock(store)
+    host, players = await room_with_players(client, 3)
+    clock["now"] += 25
+    listed = (await poll(client, players[1])).json()["data"]
+    assert listed["host_player_id"] == players[1]["player_id"]
+    assert [(p["name"], p["is_host"]) for p in listed["players"]] == [("Player 1", True)]
+
+
+@pytest.mark.asyncio
+async def test_refresh_within_window_keeps_player(env):
+    client, store, _, _ = env
+    clock = fake_clock(store)
+    host, players = await room_with_players(client, 2)
+    clock["now"] += 15  # Guest refreshed: a gap shorter than the timeout.
+    assert (await poll(client, players[1])).status_code == 200
+    clock["now"] += 15
+    assert names(await poll(client, host)) == ["Host", "Player 1"]
+
+
+@pytest.mark.asyncio
+async def test_start_does_not_count_players_who_left_silently(env):
+    client, store, _, calls = env
+    clock = fake_clock(store)
+    host, players = await room_with_players(client, 4)
+    for _ in range(3):  # Everyone but Player 3 keeps polling.
+        clock["now"] += 8
+        for p in players[:3]:
+            await poll(client, p)
+    started = await client.post(f"/api/lobby/rooms/{host['room_id']}/start", headers=auth(host))
+    assert_error(started, 400, "INVALID_REQUEST")
+    assert calls == []
+    assert names(await poll(client, host)) == ["Host", "Player 1", "Player 2"]
+
+
+@pytest.mark.asyncio
+async def test_join_reclaims_seat_from_silent_player(env):
+    client, store, _, _ = env
+    clock = fake_clock(store)
+    host, players = await room_with_players(client, 6)
+    for _ in range(3):  # Player 5 goes silent; the room looks full until the timeout.
+        clock["now"] += 8
+        for p in players[:5]:
+            await poll(client, p)
+    joined = await client.post(f"/api/lobby/rooms/{host['room_id']}/join", json={"name": "Latecomer"})
+    assert joined.status_code == 200, joined.text
+    assert names(await poll(client, host))[-1] == "Latecomer"
+    assert "Player 5" not in names(await poll(client, host))
+
+
+@pytest.mark.asyncio
+async def test_no_pruning_after_game_started(env):
+    client, store, _, _ = env
+    clock = fake_clock(store)
+    host, players = await room_with_players(client, 4)
+
+    def start(state):
+        state["phase"] = "NIGHT"
+        return state
+
+    await store.update_room(host["room_id"], start)
+    clock["now"] += 120
+    listed = await poll(client, host)
+    assert listed.status_code == 200
+    assert len(listed.json()["data"]["players"]) == 4
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_writes_are_throttled(env):
+    client, store, _, _ = env
+    clock = fake_clock(store)
+    host, _ = await room_with_players(client, 1)
+    clock["now"] += 6
+    await poll(client, host)
+    version = (await store.get_room(host["room_id"]))["version"]
+    for _ in range(2):  # Two more polls within the 5 s write interval: no extra writes.
+        clock["now"] += 2
+        await poll(client, host)
+    assert (await store.get_room(host["room_id"]))["version"] == version
+
+
+@pytest.mark.asyncio
+async def test_public_view_does_not_expose_presence(env):
+    client, store, _, _ = env
+    fake_clock(store)
+    host, _ = await room_with_players(client, 2)
+    for player in (await poll(client, host)).json()["data"]["players"]:
+        assert set(player) == {"player_id", "name", "is_host"}

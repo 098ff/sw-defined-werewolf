@@ -28,7 +28,7 @@ As the Lobby Service Lead, you implement the room creation, player joining, auth
 |---|---|---|---|
 | `POST` | `/api/lobby/rooms` | None | Creates a new room with a random 4-char uppercase code (e.g., `WOLF`). The creator becomes the Host and receives a secret `player_token`. |
 | `POST` | `/api/lobby/rooms/{room_id}/join` | None | Joins an existing room if phase is `WAITING`. Enforces unique names and max 6 players. Issues a `player_token`. |
-| `GET` | `/api/lobby/rooms/{room_id}` | Bearer Token | Returns public lobby state (room ID, phase, host player ID, list of players). Does NOT leak roles. |
+| `GET` | `/api/lobby/rooms/{room_id}` | Bearer Token | Returns public lobby state (room ID, phase, host player ID, list of players). Does NOT leak roles. Doubles as a presence heartbeat: in `WAITING`, players silent for `LOBBY_PRESENCE_TIMEOUT_SECONDS` (default 20) are removed like `/leave`. |
 | `POST` | `/api/lobby/rooms/{room_id}/start` | Bearer Token (Host) | Validates caller is Host and player count is between 4 and 6. Invokes GameMaster internal initialize API. |
 | `POST` | `/api/lobby/rooms/{room_id}/leave` | Bearer Token | Removes the caller while phase is `WAITING` (else `409 GAME_ALREADY_STARTED`). Host leaving hands host to the earliest remaining player. The token stops working afterwards. |
 | `GET` | `/health/live` & `/health/ready` | None | Kubernetes readiness and liveness probes. |
