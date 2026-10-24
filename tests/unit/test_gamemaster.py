@@ -525,8 +525,81 @@ def test_submit_vote_stale_phase_version_rejected():
         "players": {"p1": {"alive": True}, "p2": {"alive": True}},
     }
     with pytest.raises(GameError) as exc:
-        submit_vote(state, "p1", "p2", phase_version=1)  # stale version
+        submit_vote(state, "p1", "p2", phase_version=1, now=1000)  # stale version
     assert exc.value.status == 409
+    assert exc.value.code == "PHASE_VERSION_CONFLICT"
+
+
+def _day_state(roles: Dict[str, str]) -> Dict[str, Any]:
+    return {
+        "phase": "DAY",
+        "phase_version": 2,
+        "day_count": 1,
+        "phase_end_time": 1060,
+        "players": {pid: {"name": pid, "role": role, "alive": True} for pid, role in roles.items()},
+        "night_actions": empty_night_actions(),
+        "day_votes": {},
+    }
+
+
+FIVE_ROLES = {"w1": "WEREWOLF", "seer": "SEER", "doc": "DOCTOR", "v1": "VILLAGER", "v2": "VILLAGER"}
+
+
+def test_all_day_votes_submitted_ignores_dead_players():
+    players = {pid: {"role": role, "alive": True} for pid, role in FIVE_ROLES.items()}
+    players["v2"]["alive"] = False
+    votes = {"w1": "SKIP", "seer": "w1", "doc": "w1"}
+    assert engine.all_day_votes_submitted(players, votes) is False
+    votes["v1"] = "w1"
+    assert engine.all_day_votes_submitted(players, votes) is True
+
+
+def test_day_stays_open_until_every_living_player_votes():
+    state = _day_state(FIVE_ROLES)
+    for voter in ("w1", "seer", "doc", "v1"):
+        submit_vote(state, voter, "SKIP", 2, 1010)
+    assert state["phase"] == "DAY"
+    assert state["phase_version"] == 2
+
+
+def test_day_ends_early_when_all_living_players_voted():
+    state = _day_state(FIVE_ROLES)
+    for voter in ("seer", "doc", "v1"):
+        submit_vote(state, voter, "v2", 2, 1010)
+    submit_vote(state, "w1", "SKIP", 2, 1010)
+    submit_vote(state, "v2", "w1", 2, 1010)  # last living voter -> resolves immediately
+
+    assert state["phase"] == "NIGHT"
+    assert state["phase_version"] == 3
+    assert state["day_count"] == 2
+    assert state["phase_end_time"] == 1010 + NIGHT_DURATION_SECONDS
+    assert state["day_votes"] == {}
+    assert state["players"]["v2"]["alive"] is False  # 3 votes vs 1 SKIP vs 1
+
+
+def test_early_day_end_with_all_skip_executes_nobody():
+    state = _day_state(FIVE_ROLES)
+    for voter in FIVE_ROLES:
+        submit_vote(state, voter, "SKIP", 2, 1010)
+    assert state["phase"] == "NIGHT"
+    assert all(p["alive"] for p in state["players"].values())
+
+
+def test_early_day_end_can_finish_the_game():
+    state = _day_state(FIVE_ROLES)
+    for voter in ("seer", "doc", "v1", "v2"):
+        submit_vote(state, voter, "w1", 2, 1010)
+    submit_vote(state, "w1", "SKIP", 2, 1010)
+    assert state["phase"] == "ENDED"
+    assert state["winner"] == "VILLAGER"
+
+
+def test_vote_after_early_day_end_is_stale():
+    state = _day_state(FIVE_ROLES)
+    for voter in FIVE_ROLES:
+        submit_vote(state, voter, "SKIP", 2, 1010)
+    with pytest.raises(GameError) as exc:
+        submit_vote(state, "v1", "SKIP", 2, 1011)
     assert exc.value.code == "PHASE_VERSION_CONFLICT"
 
 
@@ -715,3 +788,42 @@ async def test_api_full_game_lifecycle_integration():
         assert state_after_night["me"]["private_info"]["seer_result"]["result"] == "WEREWOLF"
         # Victim was saved by doctor -> nobody died
         assert state_after_night["me"]["alive"] is True
+
+
+@pytest.mark.asyncio
+async def test_api_day_ends_as_soon_as_everyone_votes():
+    from app import main as gm_main
+    store_ref = gm_main.store
+
+    room_id = "VOTE"
+    roles = {"p1": "WEREWOLF", "p2": "SEER", "p3": "DOCTOR", "p4": "VILLAGER", "p5": "VILLAGER"}
+    players = {
+        pid: {"player_id": pid, "name": pid, "is_host": pid == "p1", "role": role, "alive": True}
+        for pid, role in roles.items()
+    }
+    await store_ref.create_room(room_id, {
+        "room_id": room_id, "phase": "DAY", "phase_version": 2, "day_count": 1,
+        "phase_end_time": 4_000_000_000,  # far future: only the votes can end this day
+        "players": players, "night_actions": empty_night_actions(), "day_votes": {},
+    })
+    for pid in roles:
+        await store_ref.create_player_session(f"tok-{pid}", {"room_id": room_id, "player_id": pid})
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        for pid in roles:
+            target = "SKIP" if pid == "p1" else "p1"
+            res = await client.post(
+                f"/api/game/rooms/{room_id}/vote",
+                headers={"Authorization": f"Bearer tok-{pid}"},
+                json={"phase_version": 2, "target_id": target},
+            )
+            assert res.status_code == 200
+            assert res.json()["data"]["status"] == "VOTE_CAST"
+
+        final = (await client.get(
+            f"/api/game/rooms/{room_id}/state",
+            headers={"Authorization": "Bearer tok-p2"},
+        )).json()["data"]
+    assert final["phase"] == "ENDED"
+    assert final["winner"] == "VILLAGER"

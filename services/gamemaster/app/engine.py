@@ -153,6 +153,11 @@ def resolve_day(players: Dict[str, Dict[str, Any]], day_votes: Dict[str, str]) -
     return executed, f"The village executed {_name(players, executed)}."
 
 
+def all_day_votes_submitted(players: Dict[str, Dict[str, Any]], day_votes: Dict[str, str]) -> bool:
+    living = [pid for pid, p in players.items() if p.get("alive", True)]
+    return bool(living) and all(pid in day_votes for pid in living)
+
+
 def all_night_actions_submitted(players: Dict[str, Dict[str, Any]], night_actions: Dict[str, Any]) -> bool:
     for pid, p in players.items():
         if not p.get("alive", True):
@@ -299,11 +304,18 @@ def submit_night_action(state: Dict[str, Any], player_id: str, action: str, targ
     return state
 
 
-def submit_vote(state: Dict[str, Any], player_id: str, target_id: str, phase_version: int) -> Dict[str, Any]:
+def submit_vote(state: Dict[str, Any], player_id: str, target_id: str,
+                phase_version: int, now: int) -> Dict[str, Any]:
+    """Validates and records a day ballot; resolves the day early once every living player has voted."""
+    players = state["players"]
     _check_actor(state, player_id, "DAY", phase_version)
-    if target_id != SKIP and not _alive(state["players"], target_id):
+    if target_id != SKIP and not _alive(players, target_id):
         raise GameError(400, "INVALID_REQUEST", "Vote target must be a living player or SKIP")
-    _record_once(state.setdefault("day_votes", {}), player_id, target_id)
+    day_votes = state.setdefault("day_votes", {})
+    _record_once(day_votes, player_id, target_id)
+
+    if all_day_votes_submitted(players, day_votes):
+        advance_phase(state, now)
     return state
 
 
