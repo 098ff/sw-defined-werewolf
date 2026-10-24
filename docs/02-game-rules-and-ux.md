@@ -35,7 +35,7 @@ stateDiagram-v2
     [*] --> WAITING : Room Created
     WAITING --> NIGHT : Host clicks Start (4-6 players)
     NIGHT --> DAY : Night Timer expires OR all night actions received
-    DAY --> NIGHT : Day Timer expires -> Vote tally complete (No winner yet)
+    DAY --> NIGHT : Day Timer expires OR all living players voted -> Vote tally complete (No winner yet)
     NIGHT --> ENDED : Win condition satisfied after Night Resolution
     DAY --> ENDED : Win condition satisfied after Vote Resolution
     ENDED --> [*]
@@ -82,7 +82,7 @@ Night concludes immediately when **all living action-holders submit their action
 
 ## 4. Day Phase & Voting Mechanics
 
-The Day Phase lasts **60 seconds**, combining public discussion and execution voting into a unified, reliable interaction window.
+The Day Phase lasts up to **60 seconds**, combining public discussion and execution voting into a unified, reliable interaction window. It ends early as soon as **every living player has cast a ballot** (a candidate or `SKIP`), mirroring the early end of the Night phase.
 
 ### 4.1 Discussion & Voting Window
 - **Public Chat:** All living players can send messages to the `PUBLIC` chat channel to deliberate. Dead players may read public chat history but cannot send messages.
@@ -90,7 +90,7 @@ The Day Phase lasts **60 seconds**, combining public discussion and execution vo
 - Submitting the same ballot again is idempotent. Submitting a conflicting ballot returns HTTP `409 ACTION_ALREADY_SUBMITTED`.
 
 ### 4.2 Deterministic Vote Resolution Algorithm
-When the 60-second timer expires:
+When the 60-second timer expires **or all living players have voted**, whichever comes first:
 1. Valid ballots from living players are tallied.
 2. If `Total Ballots == 0`, no execution occurs.
 3. If `SKIP_votes >= Highest_Candidate_votes`, no execution occurs.

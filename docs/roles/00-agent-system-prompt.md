@@ -12,7 +12,7 @@ You are pair-programming on an academic project for **2110415 Software-Defined S
 - **5x Raspberry Pi 3 B+:** K3s Worker nodes (ARM64, 1GB RAM each) connected via an Ethernet switch.
 - **5 Custom Microservices:** `gateway`, `frontend`, `lobby`, `gamemaster`, `chat` (1 replica each on Pi workers).
 - **1 Infrastructure Component:** `redis:7.2-alpine` pinned strictly to the Master VM with persistent storage.
-- **Load Balancer:** MetalLB Layer-2 Virtual IP (`192.168.1.240`).
+- **Load Balancer:** MetalLB Layer-2 Virtual IP (`192.168.0.240`).
 
 ---
 

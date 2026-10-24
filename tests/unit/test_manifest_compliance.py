@@ -119,7 +119,7 @@ class TestManifestCompliance(unittest.TestCase):
 
     def test_metallb_config_ip_range(self):
         content = read_manifest("metallb-config.yaml")
-        self.assertIn("192.168.1.240-192.168.1.250", content)
+        self.assertIn("192.168.0.240-192.168.0.250", content)
         self.assertIn("IPAddressPool", content)
         self.assertIn("L2Advertisement", content)
 

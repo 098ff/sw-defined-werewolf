@@ -18,7 +18,7 @@ In this project, your notebook acts as the **K3s Control-Plane (Master Node)**, 
 |                                     ^                                           |
 |   [VirtualBox VM: sds-k8s-master]   |                                           |
 |     - Adapter 2 (NAT) --------------+ (Outbound Internet Access)                |
-|     - Adapter 1 (Bridged) ----------+ (Private Cluster Subnet: 192.168.1.100)   |
+|     - Adapter 1 (Bridged) ----------+ (Private Cluster Subnet: 192.168.0.100)   |
 |                                     |                                           |
 |   [USB-C Ethernet Adapter: en5] ----+                                           |
 +-------------------------------------+-------------------------------------------+
@@ -26,14 +26,14 @@ In this project, your notebook acts as the **K3s Control-Plane (Master Node)**, 
                                       | Cat5e Cable
                                       v
                         [TP-Link TL-WR841N Router]
-                          (LAN Subnet: 192.168.1.0/24)
+                          (LAN Subnet: 192.168.0.0/24)
                            /     |      |      |     \
                         pi-01  pi-02  pi-03  pi-04  pi-05
                         .101   .102   .103   .104   .105
 ```
 
 ### Why Dual Adapters (Bridged + NAT)?
-- **Adapter 1 (Bridged to USB-C Ethernet):** Puts the Ubuntu VM directly on the `192.168.1.0/24` subnet alongside the Raspberry Pis. The Pis connect directly to K3s port `6443` on `192.168.1.100`.
+- **Adapter 1 (Bridged to USB-C Ethernet):** Puts the Ubuntu VM directly on the `192.168.0.0/24` subnet alongside the Raspberry Pis. The Pis connect directly to K3s port `6443` on `192.168.0.100`.
 - **Adapter 2 (NAT to Mac's Wi-Fi):** Provides outgoing internet access to download packages (`curl`, `k3s`, `docker`, `git`) even when the TP-Link router has no internet uplink during offline lab demos.
 
 ---
@@ -133,7 +133,7 @@ network:
     enp0s3:
       dhcp4: no
       addresses:
-        - 192.168.1.100/24
+        - 192.168.0.100/24
       nameservers:
         addresses: [1.1.1.1, 8.8.8.8]
 
@@ -153,7 +153,7 @@ ip addr show enp0s3
 Verify connectivity:
 ```bash
 # 1. Ping the TP-Link router on the physical LAN
-ping -c 3 192.168.1.1
+ping -c 3 192.168.0.1
 
 # 2. Ping external internet (via NAT adapter)
 ping -c 3 google.com
@@ -202,7 +202,7 @@ Run the automated master installation script:
 ```
 
 The script will:
-1. Install K3s server with `--disable servicelb --flannel-backend=vxlan --node-ip=192.168.1.100`.
+1. Install K3s server with `--disable servicelb --flannel-backend=vxlan --node-ip=192.168.0.100`.
 2. Configure `~/.kube/config` permissions.
 3. Label the node as `node-role=control-plane`.
 4. Output the cluster join token and exact join command for the 5 Raspberry Pis.
@@ -215,7 +215,7 @@ Verify the master node status:
 ```bash
 kubectl get nodes -o wide
 ```
-Output should display `master-node` in `Ready` status with internal IP `192.168.1.100`.
+Output should display `master-node` in `Ready` status with internal IP `192.168.0.100`.
 
 Now proceed to join the Raspberry Pi workers:
 ```bash

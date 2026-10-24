@@ -43,14 +43,14 @@ The architecture strictly fulfills all requirements set forth in the course spec
   👉 **Detailed VM Guide for macOS / VirtualBox:** [docs/04-virtualbox-master-setup.md](docs/04-virtualbox-master-setup.md)
 - **Wired Connectivity:** All 5 Pis and the Notebook must be plugged directly into the TP-Link LAN ports.
 
-### 2.2 Network & IP Plan (Example Subnet `192.168.1.0/24`)
-- **Router Gateway:** `192.168.1.1`
+### 2.2 Network & IP Plan (Example Subnet `192.168.0.0/24`)
+- **Router Gateway:** `192.168.0.1`
 - **Master Node (Notebook VM - Dual NIC):**
-  - **Adapter 1 (Bridged to Ethernet LAN):** `192.168.1.100` (Static IP for K3s Master)
+  - **Adapter 1 (Bridged to Ethernet LAN):** `192.168.0.100` (Static IP for K3s Master)
   - **Adapter 2 (NAT to Host Wi-Fi):** Outbound internet access for downloading packages
-- **Worker Nodes (Pi 1 to 5):** `192.168.1.101` – `192.168.1.105`
-- **MetalLB VIP Pool:** `192.168.1.240 – 192.168.1.250` (Outside DHCP lease range)
-- **Game Access URL:** `http://192.168.1.240` (Assigned to `gateway-service`)
+- **Worker Nodes (Pi 1 to 5):** `192.168.0.101` – `192.168.0.105`
+- **MetalLB VIP Pool:** `192.168.0.240 – 192.168.0.250` (Outside DHCP lease range)
+- **Game Access URL:** `http://192.168.0.240` (Assigned to `gateway-service`)
 
 > [!IMPORTANT]
 > The Notebook VM Adapter 1 **MUST be set to Bridged Mode** (bound to the physical Ethernet port) with **Promiscuous Mode = Allow All** so that it shares the exact same broadcast domain as the Raspberry Pis and allows Flannel VXLAN packets to traverse the bridge. Adapter 2 (NAT) provides outbound internet access. Detailed instructions: [docs/04-virtualbox-master-setup.md](docs/04-virtualbox-master-setup.md).
@@ -72,7 +72,7 @@ The architecture strictly fulfills all requirements set forth in the course spec
 On the Ubuntu VM, execute our turnkey master installation script:
 
 ```bash
-# Automated 1-step master setup (disables servicelb, enables Flannel VXLAN, binds 192.168.1.100)
+# Automated 1-step master setup (disables servicelb, enables Flannel VXLAN, binds 192.168.0.100)
 ./scripts/install-master.sh
 ```
 
@@ -88,7 +88,7 @@ From the Master VM, run the automated worker join script:
 Or run the join command directly on each Raspberry Pi (`pi-01` through `pi-05`):
 ```bash
 curl -sfL https://get.k3s.io | sudo INSTALL_K3S_VERSION="v1.28.8+k3s1" \
-  K3S_URL=https://192.168.1.100:6443 \
+  K3S_URL=https://192.168.0.100:6443 \
   K3S_TOKEN="<NODE_TOKEN_FROM_MASTER>" sh -
 ```
 
@@ -154,7 +154,7 @@ This script automatically executes:
 3. Deploys `redis` with PersistentVolume pinned strictly to the Control-Plane node.
 4. Deploys `gateway` with Hard Pod Anti-Affinity against handlers and master-fallback tolerations.
 5. Deploys handler microservices (`frontend`, `lobby`, `gamemaster`, `chat`) distributed across Pi workers.
-6. Deploys MetalLB Layer-2 LoadBalancer service (`http://192.168.1.240`).
+6. Deploys MetalLB Layer-2 LoadBalancer service (`http://192.168.0.240`).
 7. Waits for all readiness and liveness probes to pass.
 8. Displays instant SDN cross-node scheduling verification.
 
@@ -196,7 +196,7 @@ The E2E script plays a full 5-player game through the gateway and asserts the st
 ```bash
 ./scripts/local-dev.sh up
 python3 tests/e2e/run_game_flow.py                              # docker compose (http://localhost:8080)
-python3 tests/e2e/run_game_flow.py --base-url http://192.168.1.240   # K3s cluster via MetalLB
+python3 tests/e2e/run_game_flow.py --base-url http://192.168.0.240   # K3s cluster via MetalLB
 ```
 
 ---
@@ -206,11 +206,11 @@ python3 tests/e2e/run_game_flow.py --base-url http://192.168.1.240   # K3s clust
 ### 5.1 Accessing the Application
 Open any web browser (desktop or mobile connected to the TP-Link Wi-Fi/LAN) and navigate to the MetalLB LoadBalancer VIP:
 ```text
-http://192.168.1.240
+http://192.168.0.240
 ```
 
 ### 5.2 Playing the Game (5-Player Demo Flow)
-1. **Create Room:** Host (Member 1) opens `http://192.168.1.240`, enters their name, and clicks **Create Room**. A 4-character Room Code (e.g., `WOLF`) is issued.
+1. **Create Room:** Host (Member 1) opens `http://192.168.0.240`, enters their name, and clicks **Create Room**. A 4-character Room Code (e.g., `WOLF`) is issued.
 2. **Join Room:** Members 2–5 enter the Room Code and their respective names.
 3. **Start Game:** Once 5 players are in the lobby, the **Start Game** button becomes active for the Host. Click to assign secret roles:
    - 1x Werewolf, 1x Doctor, 1x Seer, 2x Villagers.
