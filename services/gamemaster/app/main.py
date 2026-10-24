@@ -204,7 +204,7 @@ async def submit_vote(
 
     def mutator(state: Dict[str, Any]) -> Dict[str, Any]:
         engine.advance_if_expired(state, now)
-        return engine.submit_vote(state, caller_id, payload.target_id, payload.phase_version)
+        return engine.submit_vote(state, caller_id, payload.target_id, payload.phase_version, now)
 
     await mutate_room(room_id, mutator)
     return ok({"status": "VOTE_CAST", "target_id": payload.target_id}, rid)
