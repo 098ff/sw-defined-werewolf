@@ -9,18 +9,18 @@
 
 ### 1.1 Physical & Virtual Topology
 The system runs on a hybrid Bare-Metal Kubernetes cluster managed by **K3s**:
-- **Control-Plane (Master Node):** Runs inside an **Ubuntu Linux 64-bit Virtual Machine** on the student's notebook. The VM requires at least 2 vCPUs and 2 GB RAM. It connects to the cluster via a **Bridged Network Adapter**, placing it in the same L2 subnet (`192.168.1.0/24`) as the Raspberry Pis.
+- **Control-Plane (Master Node):** Runs inside an **Ubuntu Linux 64-bit Virtual Machine** on the student's notebook. The VM requires at least 2 vCPUs and 2 GB RAM. It connects to the cluster via a **Bridged Network Adapter**, placing it in the same L2 subnet (`192.168.0.0/24`) as the Raspberry Pis.
 - **Worker Nodes (5x Pi Workers):** **Raspberry Pi 3 B+** (ARM Cortex-A53 64-bit, 1 GB LPDDR2 SDRAM) running Raspberry Pi OS Lite 64-bit.
 - **Physical Network:** All 5 Pis and the Notebook are connected directly via Cat5e Ethernet patch cables to an on-site **TP-Link TL-WR841N** 100Mbps Ethernet Switch / Router.
 
 ### 1.2 SDN & Network Layer (CNI & Load Balancing)
 - **Container Network Interface (CNI):** **Flannel** (configured in VXLAN mode, built into K3s). It establishes a Software-Defined Overlay Network across the notebook VM and 5 Pis, enabling every Pod to communicate directly via a flat IP space (`10.42.0.0/16`) regardless of host machine.
-- **Bare-Metal Load Balancer:** **MetalLB** operating in **Layer 2 Mode (ARP)**. MetalLB responds to ARP requests on the physical LAN for an assigned Virtual IP (VIP) (e.g., `192.168.1.240`). When traffic hits the VIP, MetalLB directs packets to the node currently hosting the `gateway` Pod.
+- **Bare-Metal Load Balancer:** **MetalLB** operating in **Layer 2 Mode (ARP)**. MetalLB responds to ARP requests on the physical LAN for an assigned Virtual IP (VIP) (e.g., `192.168.0.240`). When traffic hits the VIP, MetalLB directs packets to the node currently hosting the `gateway` Pod.
 
 ```mermaid
 flowchart TB
     Client[Browser / Mobile Client]
-    VIP["MetalLB Layer-2 VIP (192.168.1.240)"]
+    VIP["MetalLB Layer-2 VIP (192.168.0.240)"]
 
     subgraph Master["Notebook VM (K3s Control-Plane)"]
         Redis[("Redis 7 (AOF + HostPath PV)")]

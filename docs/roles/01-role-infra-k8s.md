@@ -23,10 +23,10 @@ As the Infrastructure Lead agent, your primary objective is to deliver a reliabl
 
 ## 2. Infrastructure Specifications & Invariants
 
-1. **Control-Plane Node:** The Master runs K3s server on the Notebook Ubuntu VM (Bridged Network Adapter, IP `192.168.1.100`).
-2. **Worker Nodes:** 5x Raspberry Pi 3 B+ (Hostnames `pi-01` to `pi-05`, IPs `192.168.1.101`–`105`).
+1. **Control-Plane Node:** The Master runs K3s server on the Notebook Ubuntu VM (Bridged Network Adapter, IP `192.168.0.100`).
+2. **Worker Nodes:** 5x Raspberry Pi 3 B+ (Hostnames `pi-01` to `pi-05`, IPs `192.168.0.101`–`105`).
 3. **CNI:** Built-in K3s **Flannel** (`--flannel-backend=vxlan`). Do not install external CNIs unless explicitly required.
-4. **LoadBalancer:** **MetalLB** in Layer-2 mode. Subnet pool `192.168.1.240-192.168.1.250`. Disables K3s `servicelb` (`--disable servicelb`).
+4. **LoadBalancer:** **MetalLB** in Layer-2 mode. Subnet pool `192.168.0.240-192.168.0.250`. Disables K3s `servicelb` (`--disable servicelb`).
 5. **Node Labels:**
    - Master: `node-role=control-plane`
    - Pis: `node-role=pi`

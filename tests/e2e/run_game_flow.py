@@ -7,7 +7,7 @@ chat channel permissions and role hiding.
 
     docker compose -f docker-compose.dev.yml up --build -d
     python tests/e2e/run_game_flow.py                         # http://localhost:8080
-    python tests/e2e/run_game_flow.py --base-url http://192.168.1.240
+    python tests/e2e/run_game_flow.py --base-url http://192.168.0.240
 
 Day phase is skipped via the demo endpoint (needs DEMO_MODE on gamemaster and the
 gateway proxying /api/demo/*). If that is unavailable the script waits for the real
