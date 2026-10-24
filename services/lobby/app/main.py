@@ -258,6 +258,29 @@ def create_app(
                             error={k: error[k] for k in ("code", "message")}, trace=trace)
         raise LobbyError(503, "SERVICE_UNAVAILABLE", "GameMaster could not initialize the room.")
 
+    @app.post("/api/lobby/rooms/{room_id}/leave")
+    async def leave_room(room_id: str, request: Request):
+        player_id, _ = await authenticate(request, room_id)
+
+        def remove_player(state):
+            # Roles are assigned once the game starts; removing a player then would skew win checks.
+            if state["phase"] != "WAITING":
+                raise LobbyError(409, "GAME_ALREADY_STARTED", "Cannot leave after the game has started.")
+            state["players"].pop(player_id, None)
+            # Hand host to the earliest remaining joiner so the room can still be started.
+            if state["host_player_id"] == player_id and state["players"]:
+                new_host = next(iter(state["players"]))
+                state["host_player_id"] = new_host
+                state["players"][new_host]["is_host"] = True
+            return state
+
+        try:
+            await store.update_room(room_id, remove_player)
+        except ValueError:
+            raise LobbyError(404, "ROOM_NOT_FOUND", "Room not found.") from None
+        # The session token stays in storage but authenticate() rejects it once the player is gone.
+        return response(request, {"status": "LEFT"})
+
     return app
 
 
