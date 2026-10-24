@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { MessageSquare, Send } from 'lucide-react';
+import { MessageSquare, Send, X } from 'lucide-react';
 import { chatApi } from '../api/client';
 import { usePolling } from '../hooks/usePolling';
 
@@ -36,7 +36,8 @@ function defaultChannel(me, phase) {
   return 'PUBLIC';
 }
 
-export default function ChatPanel({ session, state }) {
+// `visible` is false while the phone drawer is closed; unread counts are reported via onUnreadChange.
+export default function ChatPanel({ session, state, visible = true, onUnreadChange, onClose }) {
   const { me, phase } = state;
   const [messages, setMessages] = useState([]);
   const lastIdRef = useRef(0);
@@ -45,6 +46,7 @@ export default function ChatPanel({ session, state }) {
   const [error, setError] = useState(null);
   const listRef = useRef(null);
   const seenRef = useRef({});
+  const seenTotalRef = useRef(0);
 
   usePolling(
     async () => {
@@ -69,13 +71,18 @@ export default function ChatPanel({ session, state }) {
 
   const rules = channelRules(me, phase);
   const active = rules.find((r) => r.id === channel) ?? rules[0];
-  const visible = useMemo(() => messages.filter((m) => m.channel === active.id), [messages, active.id]);
+  const channelMessages = useMemo(() => messages.filter((m) => m.channel === active.id), [messages, active.id]);
 
   const unread = (id) => messages.filter((m) => m.channel === id).length - (seenRef.current[id] ?? 0);
   useEffect(() => {
-    seenRef.current[active.id] = visible.length;
+    seenRef.current[active.id] = channelMessages.length;
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
-  }, [visible.length, active.id]);
+  }, [channelMessages.length, active.id]);
+
+  useEffect(() => {
+    if (visible) seenTotalRef.current = messages.length;
+    onUnreadChange?.(visible ? 0 : messages.length - seenTotalRef.current);
+  }, [visible, messages.length, onUnreadChange]);
 
   const send = async (e) => {
     e.preventDefault();
@@ -88,9 +95,9 @@ export default function ChatPanel({ session, state }) {
   };
 
   return (
-    <div className="card flex h-[28rem] flex-col">
+    <div className="card flex h-full min-h-[20rem] flex-col">
       <div className="mb-2 flex items-center gap-2">
-        <MessageSquare className="h-4 w-4 text-slate-400" />
+        <MessageSquare className="h-4 w-4 text-muted" />
         <div role="tablist" className="flex gap-1">
           {rules.map((r) => {
             const n = r.id === active.id ? 0 : unread(r.id);
@@ -102,24 +109,29 @@ export default function ChatPanel({ session, state }) {
                 aria-selected={r.id === active.id}
                 onClick={() => setChannel(r.id)}
                 className={`rounded-md px-3 py-1 text-xs font-semibold ${
-                  r.id === active.id ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-800'
+                  r.id === active.id ? 'bg-accent text-on-accent' : 'text-muted hover:bg-sunken'
                 }`}
               >
                 {r.label}
-                {n > 0 && <span className="ml-1 rounded-full bg-indigo-500 px-1.5 text-[10px] text-white">{n}</span>}
+                {n > 0 && <span className="ml-1 rounded-full bg-accent px-1.5 text-[10px] text-on-accent">{n}</span>}
               </button>
             );
           })}
         </div>
+        {onClose && (
+          <button type="button" onClick={onClose} className="ml-auto rounded p-1 text-muted hover:text-ink md:hidden" aria-label="Close chat">
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
-      <div ref={listRef} className="flex-1 space-y-2 overflow-y-auto rounded-lg bg-slate-950 p-3 text-sm">
-        {visible.length === 0 && <p className="text-slate-600">No messages yet.</p>}
-        {visible.map((m) => (
+      <div ref={listRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto rounded-lg bg-sunken/70 p-3 text-sm">
+        {channelMessages.length === 0 && <p className="text-muted">No messages yet.</p>}
+        {channelMessages.map((m) => (
           <div key={m.message_id}>
-            <span className={`font-semibold ${m.sender_id === me.player_id ? 'text-indigo-300' : 'text-slate-200'}`}>{m.sender_name}</span>
-            <span className="ml-2 text-[10px] text-slate-600">{new Date(m.created_at * 1000).toLocaleTimeString()}</span>
-            <p className="break-words text-slate-300">{m.text}</p>
+            <span className={`font-semibold ${m.sender_id === me.player_id ? 'text-accent' : 'text-ink'}`}>{m.sender_name}</span>
+            <span className="ml-2 text-[10px] text-muted">{new Date(m.created_at * 1000).toLocaleTimeString()}</span>
+            <p className="break-words">{m.text}</p>
           </div>
         ))}
       </div>
@@ -137,7 +149,7 @@ export default function ChatPanel({ session, state }) {
           <Send className="h-4 w-4" />
         </button>
       </form>
-      {error && <p className="mt-1 text-xs text-rose-400">{error}</p>}
+      {error && <p className="mt-1 text-xs text-bad">{error}</p>}
     </div>
   );
 }

@@ -95,7 +95,9 @@ export const lobbyApi = {
   create: (name) => api('/api/lobby/rooms', { method: 'POST', body: { name } }),
   join: (roomId, name) => api(`/api/lobby/rooms/${encodeURIComponent(roomId)}/join`, { method: 'POST', body: { name } }),
   get: (roomId, token) => api(`/api/lobby/rooms/${encodeURIComponent(roomId)}`, { token }),
-  start: (roomId, token) => api(`/api/lobby/rooms/${encodeURIComponent(roomId)}/start`, { method: 'POST', token })
+  start: (roomId, token) => api(`/api/lobby/rooms/${encodeURIComponent(roomId)}/start`, { method: 'POST', token }),
+  // Contract §5.1: removes the caller from a WAITING room (host passes on); 409 once the game has started.
+  leave: (roomId, token) => api(`/api/lobby/rooms/${encodeURIComponent(roomId)}/leave`, { method: 'POST', token })
 };
 
 export const gameApi = {

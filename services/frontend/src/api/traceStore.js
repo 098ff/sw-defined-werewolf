@@ -1,12 +1,11 @@
-// Tiny external store feeding the System Trace HUD. Every gateway response is recorded here.
+// Tiny external store feeding the System Trace HUD with the latest gateway response.
 import { useSyncExternalStore } from 'react';
 
-const MAX_HISTORY = 12;
-let state = { latest: null, history: [] };
+let latest = null;
 const listeners = new Set();
 
 export function recordTrace(entry) {
-  state = { latest: entry, history: [entry, ...state.history].slice(0, MAX_HISTORY) };
+  latest = entry;
   listeners.forEach((l) => l());
 }
 
@@ -15,8 +14,8 @@ function subscribe(listener) {
   return () => listeners.delete(listener);
 }
 
-export function useTraceStore() {
-  return useSyncExternalStore(subscribe, () => state);
+export function useLatestTrace() {
+  return useSyncExternalStore(subscribe, () => latest);
 }
 
 // SDN validation rule (api-contract §1.2): trace[0] (gateway) and trace[1] (handler) on different nodes.

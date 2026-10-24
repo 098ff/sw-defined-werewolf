@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Check, Copy, Crown, LogOut, Play, Users } from 'lucide-react';
+import { copyText, selectText } from '../utils/clipboard';
 import { isSessionGone, lobbyApi } from '../api/client';
 import { usePolling } from '../hooks/usePolling';
 import SyncBadge from './SyncBadge';
@@ -11,7 +12,9 @@ export default function Lobby({ session, onStarted, onLeave }) {
   const [lobby, setLobby] = useState(null);
   const [error, setError] = useState(null);
   const [starting, setStarting] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copyState, setCopyState] = useState(null); // 'copied' | 'manual' | null
+  const [leaving, setLeaving] = useState(false);
+  const codeRef = useRef(null);
 
   const { syncing } = usePolling(
     async () => {
@@ -41,12 +44,27 @@ export default function Lobby({ session, onStarted, onLeave }) {
   };
 
   const copyCode = async () => {
-    try {
-      await navigator.clipboard.writeText(session.room_id);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* clipboard blocked */
+    const ok = await copyText(session.room_id);
+    if (!ok) selectText(codeRef.current);
+    setCopyState(ok ? 'copied' : 'manual');
+    setTimeout(() => setCopyState(null), 2500);
+  };
+
+  // Tell the Lobby we're gone so other players stop seeing us.
+  const leave = async () => {
+    setLeaving(true);
+    setError(null);
+    const res = await lobbyApi.leave(session.room_id, session.player_token);
+    if (res.ok || res.status === 401 || res.status === 404) {
+      // Left, or there's nothing left to leave (token already revoked / room gone).
+      onLeave();
+    } else if (res.error?.code === 'GAME_ALREADY_STARTED') {
+      // Too late to leave: roles are assigned, so take the player into the game instead.
+      onStarted();
+    } else {
+      // Network or server trouble: keep the session so the player can retry instead of lingering as a ghost.
+      setLeaving(false);
+      setError("Couldn't leave right now. Try again.");
     }
   };
 
@@ -56,10 +74,18 @@ export default function Lobby({ session, onStarted, onLeave }) {
       <div className="card text-center">
         <p className="label">Room code</p>
         <button type="button" onClick={copyCode} className="group inline-flex items-center gap-3" title="Copy room code">
-          <span className="font-mono text-5xl font-bold tracking-[0.3em] text-indigo-200">{session.room_id}</span>
-          {copied ? <Check className="h-5 w-5 text-emerald-400" /> : <Copy className="h-5 w-5 text-slate-500 group-hover:text-slate-300" />}
+          <span ref={codeRef} className="font-mono text-5xl font-bold tracking-[0.3em] text-indigo-200">
+            {session.room_id}
+          </span>
+          {copyState === 'copied' ? <Check className="h-5 w-5 text-good" /> : <Copy className="h-5 w-5 text-muted group-hover:text-ink" />}
         </button>
-        <p className="mt-2 text-sm text-slate-400">Share this code with friends to join.</p>
+        <p className="mt-2 text-sm text-muted" aria-live="polite">
+          {copyState === 'copied'
+            ? 'Copied. Share it with your friends.'
+            : copyState === 'manual'
+              ? 'Copying is blocked here. The code is selected: press Cmd+C or Ctrl+C.'
+              : 'Tap the code to copy it, then share it with friends.'}
+        </p>
       </div>
 
       <div className="card mt-4">
@@ -102,8 +128,8 @@ export default function Lobby({ session, onStarted, onLeave }) {
           <p className="text-center text-sm text-slate-400">Waiting for the host to start the game…</p>
         )}
         {error && <p className="text-center text-sm text-rose-400">{error}</p>}
-        <button type="button" className="btn-ghost" onClick={() => onLeave()}>
-          <LogOut className="h-4 w-4" /> Leave
+        <button type="button" className="btn-ghost" onClick={leave} disabled={leaving}>
+          <LogOut className="h-4 w-4" /> {leaving ? 'Leaving…' : 'Leave'}
         </button>
       </div>
     </div>
