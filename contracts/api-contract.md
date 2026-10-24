@@ -214,6 +214,7 @@ class StateStore(ABC):
 
 #### `GET /api/lobby/rooms/{room_id}`
 - **Auth:** Bearer Token
+- **Presence:** Each call also counts as a heartbeat (the lobby page polls every 2 s). While the phase is `WAITING`, players not seen for `LOBBY_PRESENCE_TIMEOUT_SECONDS` (default 20, measured on the server clock) are removed exactly as if they had called `/leave`: host passes to the earliest remaining player and their token returns `401 INVALID_TOKEN`. `join` and `start` apply the same check, so silent players never hold a seat or count toward the 4-player minimum. Nobody is removed once the game has started.
 - **Response `data`:**
   ```json
   {
