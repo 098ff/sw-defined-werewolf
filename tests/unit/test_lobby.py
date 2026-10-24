@@ -363,3 +363,62 @@ async def test_private_room_data_not_returned_even_after_start(env):
     assert "WEREWOLF" not in response.text
     assert "night_actions" not in response.text
     assert host["player_token"] not in response.text
+
+
+@pytest.mark.asyncio
+async def test_guest_leave_removes_player_and_revokes_token(env):
+    client, _, _, _ = env
+    host, players = await room_with_players(client, 3)
+    guest = players[1]
+    path = f"/api/lobby/rooms/{host['room_id']}"
+    left = await client.post(path + "/leave", headers=auth(guest))
+    assert left.status_code == 200
+    assert left.json()["data"] == {"status": "LEFT"}
+    view = (await client.get(path, headers=auth(host))).json()["data"]
+    assert guest["player_id"] not in [p["player_id"] for p in view["players"]]
+    assert view["host_player_id"] == host["player_id"]
+    assert_error(await client.get(path, headers=auth(guest)), 401, "INVALID_TOKEN")
+    assert_error(await client.post(path + "/leave", headers=auth(guest)), 401, "INVALID_TOKEN")
+    rejoined = await client.post(path + "/join", json={"name": "Player 1"})
+    assert rejoined.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_host_leave_transfers_host_to_next_player(env):
+    client, _, _, _ = env
+    host, players = await room_with_players(client, 3)
+    path = f"/api/lobby/rooms/{host['room_id']}"
+    assert (await client.post(path + "/leave", headers=auth(host))).status_code == 200
+    view = (await client.get(path, headers=auth(players[1]))).json()["data"]
+    assert view["host_player_id"] == players[1]["player_id"]
+    assert [p["is_host"] for p in view["players"]] == [True, False]
+    assert_error(await client.post(path + "/start", headers=auth(players[2])), 403, "HOST_ONLY")
+
+
+@pytest.mark.asyncio
+async def test_last_player_leave_empties_room(env):
+    client, store, _, _ = env
+    host, _ = await room_with_players(client)
+    assert (await client.post(f"/api/lobby/rooms/{host['room_id']}/leave", headers=auth(host))).status_code == 200
+    assert (await store.get_room(host["room_id"]))["players"] == {}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("phase", ["NIGHT", "DAY", "ENDED"])
+async def test_leave_rejected_after_game_started(env, phase):
+    client, store, _, _ = env
+    host, players = await room_with_players(client, 4)
+    await store.update_room(host["room_id"], lambda state: {**state, "phase": phase})
+    assert_error(await client.post(f"/api/lobby/rooms/{host['room_id']}/leave", headers=auth(players[1])),
+                 409, "GAME_ALREADY_STARTED")
+    assert len((await store.get_room(host["room_id"]))["players"]) == 4
+
+
+@pytest.mark.asyncio
+async def test_leave_requires_valid_token(env):
+    client, _, _, _ = env
+    host, _ = await room_with_players(client)
+    other, _ = await room_with_players(client)
+    path = f"/api/lobby/rooms/{host['room_id']}/leave"
+    assert_error(await client.post(path), 401, "MISSING_TOKEN")
+    assert_error(await client.post(path, headers=auth(other)), 401, "INVALID_TOKEN")

@@ -235,6 +235,14 @@ class StateStore(ABC):
   { "status": "STARTED" }
   ```
 
+#### `POST /api/lobby/rooms/{room_id}/leave`
+- **Auth:** Bearer Token
+- **Validation:** Room phase must be `WAITING` (otherwise `409 GAME_ALREADY_STARTED`). If the host leaves, host passes to the earliest remaining player. The caller's token is rejected (`401 INVALID_TOKEN`) afterwards.
+- **Response `data`:**
+  ```json
+  { "status": "LEFT" }
+  ```
+
 ---
 
 ### 5.2 GameMaster Service Endpoints
