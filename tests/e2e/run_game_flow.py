@@ -194,13 +194,13 @@ def run(game: GameClient) -> None:
     for name in (doctor, seer, survivor):
         game.call("POST", f"/api/game/rooms/{game.room_id}/vote", name,
                   json={"phase_version": phase_version, "target_id": game.ids[wolf]}, step=f"vote[{name}]")
-    game.call("POST", f"/api/game/rooms/{game.room_id}/vote", wolf,
-              json={"phase_version": phase_version, "target_id": "SKIP"}, step=f"vote[{wolf}]")
+    # Dead vote must be checked before the last living ballot, which ends the day early
     game.call("POST", f"/api/game/rooms/{game.room_id}/vote", victim, expect=403,
               json={"phase_version": phase_version, "target_id": "SKIP"}, step="dead vote")
+    game.call("POST", f"/api/game/rooms/{game.room_id}/vote", wolf,
+              json={"phase_version": phase_version, "target_id": "SKIP"}, step=f"vote[{wolf}]")
 
-    print("[12] End of day -> villagers win, all roles revealed")
-    game.force_next_phase(seer)
+    print("[12] Last ballot ends the day -> villagers win, all roles revealed")
     view = wait_for_phase(game, seer, "ENDED")
     check(view["winner"] == "VILLAGER", f"villagers should win: {view['winner']}")
     check(all(p["role"] for p in view["players"]), "all roles should be revealed after the game")
