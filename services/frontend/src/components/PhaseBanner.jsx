@@ -2,35 +2,35 @@ import { Moon, Sun, Timer, Trophy } from 'lucide-react';
 import { useCountdown } from '../hooks/useCountdown';
 
 const PHASES = {
-  NIGHT: { icon: Moon, label: 'Night', tone: 'from-indigo-950 to-slate-900 border-indigo-800 text-indigo-200' },
-  DAY: { icon: Sun, label: 'Day', tone: 'from-amber-900/60 to-slate-900 border-amber-700 text-amber-100' },
-  ENDED: { icon: Trophy, label: 'Game Over', tone: 'from-slate-800 to-slate-900 border-slate-700 text-slate-100' }
+  NIGHT: { icon: Moon, label: 'Night', iconTone: 'text-indigo-200' },
+  DAY: { icon: Sun, label: 'Day', iconTone: 'text-amber-600' },
+  ENDED: { icon: Trophy, label: 'Game over', iconTone: 'text-amber-300' }
 };
 
 export default function PhaseBanner({ state }) {
-  const left = useCountdown(state.phase === 'ENDED' ? null : state.phase_end_time);
-  const phase = PHASES[state.phase] ?? { icon: Timer, label: state.phase, tone: 'from-slate-800 to-slate-900 border-slate-700' };
+  const ended = state.phase === 'ENDED';
+  const left = useCountdown(ended ? null : state.phase_end_time);
+  const phase = PHASES[state.phase] ?? { icon: Timer, label: state.phase, iconTone: 'text-muted' };
   const Icon = phase.icon;
-  const mm = String(Math.floor(left / 60)).padStart(1, '0');
-  const ss = String(left % 60).padStart(2, '0');
+  const time = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
 
   return (
-    <div className={`rounded-xl border bg-gradient-to-r p-4 ${phase.tone}`}>
-      <div className="flex items-center gap-3">
-        <Icon className="h-7 w-7" />
-        <div>
-          <div className="text-xl font-bold">
-            {phase.label} {state.phase !== 'ENDED' && state.day_count ? state.day_count : ''}
-          </div>
-          <div className="text-xs opacity-70">Room {state.room_id}</div>
+    <div className="flex items-center gap-3 rounded-xl border border-line bg-panel/70 px-4 py-3">
+      <Icon className={`h-8 w-8 shrink-0 ${phase.iconTone}`} aria-hidden="true" />
+      <div className="min-w-0 flex-1">
+        <div className="text-lg font-bold leading-tight">
+          {phase.label} {!ended && state.day_count ? state.day_count : ''}
         </div>
-        {state.phase !== 'ENDED' && (
-          <div className={`ml-auto font-mono text-3xl tabular-nums ${left <= 10 ? 'text-rose-300' : ''}`} aria-label="Time left">
-            {left > 0 ? `${mm}:${ss}` : 'resolving…'}
-          </div>
-        )}
+        {state.announcement && <p className="text-sm text-muted">{state.announcement}</p>}
       </div>
-      {state.announcement && <p className="mt-3 text-sm opacity-90">{state.announcement}</p>}
+      {!ended && (
+        <div
+          className={`shrink-0 rounded-lg border border-line px-3 py-1 font-mono text-2xl tabular-nums ${left <= 10 ? 'text-bad' : ''}`}
+          aria-label="Time left"
+        >
+          {left > 0 ? time : '…'}
+        </div>
+      )}
     </div>
   );
 }

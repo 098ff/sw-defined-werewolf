@@ -95,7 +95,9 @@ export const lobbyApi = {
   create: (name) => api('/api/lobby/rooms', { method: 'POST', body: { name } }),
   join: (roomId, name) => api(`/api/lobby/rooms/${encodeURIComponent(roomId)}/join`, { method: 'POST', body: { name } }),
   get: (roomId, token) => api(`/api/lobby/rooms/${encodeURIComponent(roomId)}`, { token }),
-  start: (roomId, token) => api(`/api/lobby/rooms/${encodeURIComponent(roomId)}/start`, { method: 'POST', token })
+  start: (roomId, token) => api(`/api/lobby/rooms/${encodeURIComponent(roomId)}/start`, { method: 'POST', token }),
+  // Pending in Lobby (Role 3). Until it exists this 404s and the caller just clears the local session.
+  leave: (roomId, token) => api(`/api/lobby/rooms/${encodeURIComponent(roomId)}/leave`, { method: 'POST', token })
 };
 
 export const gameApi = {

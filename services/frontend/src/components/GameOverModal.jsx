@@ -1,5 +1,6 @@
 import { RotateCcw, Trophy } from 'lucide-react';
 import { ROLE_INFO, roleLabel } from '../api/roles';
+import RoleArt from './RoleArt';
 
 export default function GameOverModal({ state, onExit }) {
   const wolvesWon = state.winner === 'WEREWOLF';
@@ -26,7 +27,11 @@ export default function GameOverModal({ state, onExit }) {
                   {p.name}
                   {p.player_id === state.me.player_id && <span className="text-slate-500"> (you)</span>}
                 </td>
-                <td className={`py-2 ${ROLE_INFO[p.role]?.tone.split(' ')[0] ?? ''}`}>{roleLabel(p.role)}</td>
+                <td className={`py-2 ${ROLE_INFO[p.role]?.tone.split(' ')[0] ?? ''}`}>
+                  <span className="flex items-center gap-2">
+                    <RoleArt role={p.role} size={22} /> {roleLabel(p.role)}
+                  </span>
+                </td>
                 <td className={`py-2 text-right ${p.alive ? 'text-emerald-300' : 'text-slate-500'}`}>{p.alive ? 'Alive' : 'Dead'}</td>
               </tr>
             ))}
