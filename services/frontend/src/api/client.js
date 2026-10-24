@@ -96,7 +96,7 @@ export const lobbyApi = {
   join: (roomId, name) => api(`/api/lobby/rooms/${encodeURIComponent(roomId)}/join`, { method: 'POST', body: { name } }),
   get: (roomId, token) => api(`/api/lobby/rooms/${encodeURIComponent(roomId)}`, { token }),
   start: (roomId, token) => api(`/api/lobby/rooms/${encodeURIComponent(roomId)}/start`, { method: 'POST', token }),
-  // Pending in Lobby (Role 3). Until it exists this 404s and the caller just clears the local session.
+  // Contract §5.1: removes the caller from a WAITING room (host passes on); 409 once the game has started.
   leave: (roomId, token) => api(`/api/lobby/rooms/${encodeURIComponent(roomId)}/leave`, { method: 'POST', token })
 };
 

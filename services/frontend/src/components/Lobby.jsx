@@ -50,11 +50,22 @@ export default function Lobby({ session, onStarted, onLeave }) {
     setTimeout(() => setCopyState(null), 2500);
   };
 
-  // Tell the Lobby we're gone so other players stop seeing us, then drop the local session either way.
+  // Tell the Lobby we're gone so other players stop seeing us.
   const leave = async () => {
     setLeaving(true);
-    await lobbyApi.leave(session.room_id, session.player_token);
-    onLeave();
+    setError(null);
+    const res = await lobbyApi.leave(session.room_id, session.player_token);
+    if (res.ok || res.status === 401 || res.status === 404) {
+      // Left, or there's nothing left to leave (token already revoked / room gone).
+      onLeave();
+    } else if (res.error?.code === 'GAME_ALREADY_STARTED') {
+      // Too late to leave: roles are assigned, so take the player into the game instead.
+      onStarted();
+    } else {
+      // Network or server trouble: keep the session so the player can retry instead of lingering as a ghost.
+      setLeaving(false);
+      setError("Couldn't leave right now. Try again.");
+    }
   };
 
   return (

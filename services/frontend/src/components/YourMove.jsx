@@ -44,7 +44,7 @@ function describeMove(me, phase, players) {
     return {
       icon: Gavel,
       title: 'Discuss, then vote someone out',
-      hint: 'Share what you know in Public chat. Pick one player or skip. Voting closes when the timer runs out.',
+      hint: 'Share what you know in Public chat. Pick one player or skip. Voting closes once everyone has voted or the timer runs out.',
       button: 'Cast vote',
       kind: 'vote'
     };
@@ -84,7 +84,7 @@ export default function YourMove({ session, state }) {
   const title = isLocked ? `${move.kind === 'vote' ? 'Vote cast' : 'Locked in'}: ${nameOf(locked)}` : move.title;
   const hint = isLocked
     ? move.kind === 'vote'
-      ? 'Waiting for the vote to close…'
+      ? 'Waiting for the others. Day ends once everyone has voted.'
       : 'Waiting for the other players…'
     : move.hint;
 
@@ -101,6 +101,8 @@ export default function YourMove({ session, state }) {
           });
     setBusy(false);
     if (res.ok) setLocked(choice);
+    // The phase can move on mid-click now that day and night both end early; the next poll catches up.
+    else if (res.error?.code === 'PHASE_VERSION_CONFLICT') setError('The phase just changed. Updating…');
     else setError(res.error?.message || res.error?.code);
   };
 
