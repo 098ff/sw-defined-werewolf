@@ -98,6 +98,9 @@ kind: Service
 metadata:
   name: gateway-service
   namespace: werewolf
+  annotations:
+    # Pin the VIP so players always use the same URL
+    metallb.universe.tf/loadBalancerIPs: 192.168.0.240
 spec:
   type: LoadBalancer
   ports:

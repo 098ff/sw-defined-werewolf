@@ -6,10 +6,10 @@ set -e
 # Can be run from Master Node (via SSH) or prints instructions for manual run
 # ==============================================================================
 
-MASTER_IP="${2:-192.168.0.100}"
+MASTER_IP="${2:-192.168.0.50}"
 PI_USER="${PI_USER:-pi}"
 K3S_VERSION="${K3S_VERSION:-v1.28.8+k3s1}"
-WORKER_IPS=("192.168.0.101" "192.168.0.102" "192.168.0.103" "192.168.0.104" "192.168.0.105")
+WORKER_IPS=("192.168.0.101" "192.168.0.102" "192.168.0.103" "192.168.0.104" "192.168.0.106")
 
 # 1. Resolve Token
 if [ -n "$1" ]; then

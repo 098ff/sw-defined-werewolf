@@ -6,8 +6,10 @@ set -e
 # Run this script directly on the Ubuntu Master VM (VirtualBox / Physical)
 # ==============================================================================
 
-MASTER_IP="${1:-192.168.0.100}"
+MASTER_IP="${1:-192.168.0.50}"
 K3S_VERSION="${K3S_VERSION:-v1.28.8+k3s1}"
+# Bridged LAN interface; without this flannel picks the NAT interface (default route) and cross-node pod traffic breaks
+FLANNEL_IFACE="${FLANNEL_IFACE:-enp0s8}"
 INSTALL_DIR="/var/lib/werewolf-redis"
 
 echo "=========================================================="
@@ -42,8 +44,9 @@ mkdir -p "$INSTALL_DIR"
 chmod 777 "$INSTALL_DIR"
 
 # 4. Install K3s Control-Plane
-echo "[3/6] Installing K3s Server version $K3S_VERSION (Flannel VXLAN, ServiceLB Disabled)..."
-curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="$K3S_VERSION" INSTALL_K3S_EXEC="--disable servicelb --flannel-backend=vxlan --node-ip=$MASTER_IP --advertise-address=$MASTER_IP" sh -
+echo "[3/6] Installing K3s Server version $K3S_VERSION (Flannel VXLAN, ServiceLB + Traefik Disabled)..."
+# Traefik is disabled so it does not grab the first MetalLB VIP (192.168.0.240) meant for gateway-service
+curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="$K3S_VERSION" INSTALL_K3S_EXEC="--disable servicelb --disable traefik --flannel-backend=vxlan --flannel-iface=$FLANNEL_IFACE --node-ip=$MASTER_IP --advertise-address=$MASTER_IP --write-kubeconfig-mode=0644" sh -
 
 # 5. Set up Kubeconfig Permissions for Normal User
 echo "[4/6] Setting up Kubeconfig Permissions..."

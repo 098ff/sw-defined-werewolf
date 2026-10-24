@@ -15,3 +15,8 @@ metadata:
 spec:
   ipAddressPools:
   - werewolf-ip-pool
+  # Announce only from the master VM, which also holds 192.168.0.240 on enp0s8
+  # so the kernel learns WiFi clients' MACs from their ARP requests
+  nodeSelectors:
+  - matchLabels:
+      node-role: control-plane
