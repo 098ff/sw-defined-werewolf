@@ -1,9 +1,15 @@
 import asyncio
 import copy
+import hashlib
 import json
+import random
 import time
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Optional
+
+ROOM_TTL_SECONDS = 86400
+CHAT_HISTORY_LIMIT = 200
+
 
 class StateConflictError(Exception):
     """Raised when an atomic optimistic concurrency check fails."""
@@ -36,6 +42,11 @@ class StateStore(ABC):
 
     @abstractmethod
     async def get_chat(self, room_id: str, after_id: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
+        pass
+
+    @abstractmethod
+    async def get_server_time(self) -> int:
+        """Returns authoritative Unix timestamp in seconds (Redis TIME or system clock)."""
         pass
 
 
@@ -101,9 +112,8 @@ class InMemoryStateStore(StateStore):
             msg["message_id"] = self._chat_seq[room_id]
             msg.setdefault("created_at", int(time.time()))
             self._chats[room_id].append(msg)
-            # Cap at 200 messages
-            if len(self._chats[room_id]) > 200:
-                self._chats[room_id] = self._chats[room_id][-200:]
+            if len(self._chats[room_id]) > CHAT_HISTORY_LIMIT:
+                self._chats[room_id] = self._chats[room_id][-CHAT_HISTORY_LIMIT:]
             return copy.deepcopy(msg)
 
     async def get_chat(self, room_id: str, after_id: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
@@ -111,6 +121,29 @@ class InMemoryStateStore(StateStore):
             messages = self._chats.get(room_id, [])
             filtered = [m for m in messages if m.get("message_id", 0) > after_id]
             return copy.deepcopy(filtered[:limit])
+
+    async def get_server_time(self) -> int:
+        return int(time.time())
+
+
+# Assigns the message_id and appends in one atomic step, so the list order always
+# matches message_id order even when several chat pods append concurrently.
+_APPEND_CHAT_LUA = """
+local id = redis.call('INCR', KEYS[1])
+local msg = cjson.decode(ARGV[1])
+msg['message_id'] = id
+local encoded = cjson.encode(msg)
+redis.call('RPUSH', KEYS[2], encoded)
+redis.call('LTRIM', KEYS[2], -tonumber(ARGV[2]), -1)
+redis.call('EXPIRE', KEYS[1], ARGV[3])
+redis.call('EXPIRE', KEYS[2], ARGV[3])
+return encoded
+"""
+
+
+def _session_key(token: str) -> str:
+    # Contract: session:{token_hash} -- the raw bearer token never lands in Redis.
+    return f"session:{hashlib.sha256(token.encode()).hexdigest()}"
 
 
 class RedisStateStore(StateStore):
@@ -125,7 +158,11 @@ class RedisStateStore(StateStore):
     async def _get_redis(self):
         if self._redis is None:
             import redis.asyncio as aioredis
-            self._redis = aioredis.from_url(self.redis_url, decode_responses=True)
+            # Short timeouts so a dead Redis fails fast (503) instead of hanging requests.
+            self._redis = aioredis.from_url(
+                self.redis_url, decode_responses=True,
+                socket_connect_timeout=2, socket_timeout=2,
+            )
         return self._redis
 
     async def get_room(self, room_id: str) -> Optional[Dict[str, Any]]:
@@ -140,10 +177,11 @@ class RedisStateStore(StateStore):
         state.setdefault("version", 1)
         state.setdefault("created_at", int(time.time()))
         state.setdefault("updated_at", int(time.time()))
-        success = await r.set(key, json.dumps(state), nx=True, ex=86400)
+        success = await r.set(key, json.dumps(state), nx=True, ex=ROOM_TTL_SECONDS)
         return bool(success)
 
-    async def update_room(self, room_id: str, mutator: Callable[[Dict[str, Any]], Dict[str, Any]], max_retries: int = 3) -> Dict[str, Any]:
+    async def update_room(self, room_id: str, mutator: Callable[[Dict[str, Any]], Dict[str, Any]], max_retries: int = 10) -> Dict[str, Any]:
+        # 10 retries: a full room (6 players) voting in the same instant must not surface 409s.
         import redis.asyncio as aioredis
         r = await self._get_redis()
         key = f"room:{room_id}:state"
@@ -161,44 +199,39 @@ class RedisStateStore(StateStore):
                     updated["updated_at"] = int(time.time())
 
                     pipe.multi()
-                    pipe.set(key, json.dumps(updated), ex=86400)
+                    pipe.set(key, json.dumps(updated), ex=ROOM_TTL_SECONDS)
                     await pipe.execute()
                     return updated
                 except aioredis.WatchError:
                     if attempt == max_retries - 1:
                         raise StateConflictError(f"Concurrent update collision on room {room_id}")
-                    await asyncio.sleep(0.05 * (attempt + 1))
+                    # Jitter keeps colliding writers from retrying in lockstep.
+                    await asyncio.sleep(random.uniform(0, 0.02 * (attempt + 1)))
         raise StateConflictError("Exceeded update retry attempts")
 
     async def get_player_session(self, token: str) -> Optional[Dict[str, Any]]:
         r = await self._get_redis()
-        raw = await r.get(f"session:{token}")
+        raw = await r.get(_session_key(token))
         return json.loads(raw) if raw else None
 
     async def create_player_session(self, token: str, session_data: Dict[str, Any]) -> None:
         r = await self._get_redis()
         data = copy.deepcopy(session_data)
         data.setdefault("created_at", int(time.time()))
-        await r.set(f"session:{token}", json.dumps(data), ex=86400)
+        await r.set(_session_key(token), json.dumps(data), ex=ROOM_TTL_SECONDS)
 
     async def append_chat(self, room_id: str, message: Dict[str, Any]) -> Dict[str, Any]:
         r = await self._get_redis()
         seq_key = f"room:{room_id}:chat_seq"
         chat_key = f"room:{room_id}:chat"
 
-        msg_id = await r.incr(seq_key)
         msg = copy.deepcopy(message)
-        msg["message_id"] = msg_id
         msg.setdefault("created_at", int(time.time()))
-
-        async with r.pipeline() as pipe:
-            pipe.rpush(chat_key, json.dumps(msg))
-            pipe.ltrim(chat_key, -200, -1)
-            pipe.expire(chat_key, 86400)
-            pipe.expire(seq_key, 86400)
-            await pipe.execute()
-
-        return msg
+        encoded = await r.eval(
+            _APPEND_CHAT_LUA, 2, seq_key, chat_key,
+            json.dumps(msg), CHAT_HISTORY_LIMIT, ROOM_TTL_SECONDS,
+        )
+        return json.loads(encoded)
 
     async def get_chat(self, room_id: str, after_id: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
         r = await self._get_redis()
@@ -207,3 +240,8 @@ class RedisStateStore(StateStore):
         messages = [json.loads(item) for item in raw_items]
         filtered = [m for m in messages if m.get("message_id", 0) > after_id]
         return filtered[:limit]
+
+    async def get_server_time(self) -> int:
+        r = await self._get_redis()
+        seconds, _ = await r.time()
+        return int(seconds)

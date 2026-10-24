@@ -30,6 +30,7 @@ As the Gateway & Frontend Lead, you build the client-facing presentation layer a
    - `/api/lobby/*` $\rightarrow$ Proxy to `http://lobby:8000`
    - `/api/game/*` $\rightarrow$ Proxy to `http://gamemaster:8000`
    - `/api/chat/*` $\rightarrow$ Proxy to `http://chat:8000`
+   - `/api/demo/*` $\rightarrow$ Proxy to `http://gamemaster:8000` (demo `force-next`, guarded by `X-Demo-Secret`)
 3. **Trace Header & Trace Envelope Assembly:**
    - Generate a UUID for each request (`req-xxxx`) and attach `X-Request-ID` to all upstream calls.
    - Read own identity from environment: `POD_NAME = os.getenv("POD_NAME", "gateway-local")`, `NODE_NAME = os.getenv("NODE_NAME", "node-local")`.

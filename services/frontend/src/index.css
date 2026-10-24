@@ -1,10 +1,76 @@
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Default (landing, lobby, game over): slate night-sky. */
+  :root {
+    --c-page: 2 6 23;
+    --c-panel: 15 23 42;
+    --c-sunken: 2 6 23;
+    --c-line: 30 41 59;
+    --c-ink: 241 245 249;
+    --c-muted: 148 163 184;
+    --c-accent: 79 70 229;
+    --c-on-accent: 255 255 255;
+    --c-move: 238 242 255;
+    --c-move-ink: 30 27 75;
+    --c-move-muted: 67 56 202;
+    --c-good: 110 231 183;
+    --c-bad: 253 164 175;
+    color-scheme: dark;
+  }
+
+  :root[data-theme='night'] {
+    --c-page: 23 20 61;
+    --c-panel: 39 35 102;
+    --c-sunken: 23 20 61;
+    --c-line: 67 61 160;
+    --c-ink: 238 242 255;
+    --c-muted: 165 180 252;
+    --c-accent: 99 102 241;
+  }
+
+  :root[data-theme='day'] {
+    --c-page: 254 243 199;
+    --c-panel: 255 251 235;
+    --c-sunken: 254 243 199;
+    --c-line: 252 211 77;
+    --c-ink: 69 26 3;
+    --c-muted: 146 64 14;
+    --c-accent: 180 83 9;
+    --c-move: 255 255 255;
+    --c-move-ink: 69 26 3;
+    --c-move-muted: 146 64 14;
+    --c-good: 21 128 61;
+    --c-bad: 185 28 28;
+    color-scheme: light;
+  }
+
+  body {
+    @apply bg-page text-ink transition-colors duration-700;
+  }
 }
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  background-color: #0f172a;
-  color: #f8fafc;
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-line bg-panel/80 p-4;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition
+           disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-primary {
+    @apply btn bg-accent text-on-accent hover:brightness-110;
+  }
+  .btn-ghost {
+    @apply btn border border-line text-ink hover:bg-sunken;
+  }
+  .input {
+    @apply w-full rounded-lg border border-line bg-sunken px-3 py-2 text-sm text-ink outline-none placeholder:text-muted
+           focus:border-accent focus:ring-1 focus:ring-accent disabled:opacity-60;
+  }
+  .label {
+    @apply mb-1 block text-xs font-medium uppercase tracking-wide text-muted;
+  }
 }

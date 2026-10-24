@@ -214,6 +214,7 @@ class StateStore(ABC):
 
 #### `GET /api/lobby/rooms/{room_id}`
 - **Auth:** Bearer Token
+- **Presence:** Each call also counts as a heartbeat (the lobby page polls every 2 s). While the phase is `WAITING`, players not seen for `LOBBY_PRESENCE_TIMEOUT_SECONDS` (default 20, measured on the server clock) are removed exactly as if they had called `/leave`: host passes to the earliest remaining player and their token returns `401 INVALID_TOKEN`. `join` and `start` apply the same check, so silent players never hold a seat or count toward the 4-player minimum. Nobody is removed once the game has started.
 - **Response `data`:**
   ```json
   {
@@ -233,6 +234,14 @@ class StateStore(ABC):
 - **Response `data`:**
   ```json
   { "status": "STARTED" }
+  ```
+
+#### `POST /api/lobby/rooms/{room_id}/leave`
+- **Auth:** Bearer Token
+- **Validation:** Room phase must be `WAITING` (otherwise `409 GAME_ALREADY_STARTED`). If the host leaves, host passes to the earliest remaining player. The caller's token is rejected (`401 INVALID_TOKEN`) afterwards.
+- **Response `data`:**
+  ```json
+  { "status": "LEFT" }
   ```
 
 ---
@@ -274,7 +283,15 @@ class StateStore(ABC):
 
 #### `POST /api/game/rooms/{room_id}/night-actions`
 - **Auth:** Bearer Token
-- **Request Body:**
+- **Action Values by Role** (exact strings; anything else returns `403 FORBIDDEN_ROLE`):
+  | Role | Canonical `action` Value | Target Constraint |
+  |---|---|---|
+  | `WEREWOLF` | `"WEREWOLF_KILL"` | Living player ID (cannot target self). |
+  | `DOCTOR` | `"DOCTOR_PROTECT"` | Living player ID (permitted to target self). |
+  | `SEER` | `"SEER_CHECK"` | Living player ID (cannot target self). |
+
+  `VILLAGER` has no night action.
+- **Request Body (Example - Seer Inspect):**
   ```json
   {
     "phase_version": 14,
@@ -357,6 +374,15 @@ class StateStore(ABC):
 ---
 
 ### 5.4 Internal & Health Endpoints
+
+#### `POST /api/demo/rooms/{room_id}/force-next`
+- **Caller:** Demo operator only (routed by `gateway` to `gamemaster`).
+- **Auth:** Header `X-Demo-Secret: <DEMO_SECRET>`; enabled only when `DEMO_MODE=true`. Otherwise `403 FORBIDDEN`.
+- **Behavior:** Immediately advances the room to its next phase (resolving the current one) instead of waiting for the timer.
+- **Response `data`:**
+  ```json
+  { "status": "ADVANCED", "phase": "DAY", "phase_version": 15, "announcement": "Dawn breaks. ..." }
+  ```
 
 #### `POST /internal/rooms/{room_id}/initialize`
 - **Caller:** `lobby` Service only.

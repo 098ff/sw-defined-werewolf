@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   redis:
     image: redis:7.2-alpine
@@ -7,6 +5,11 @@ services:
     ports:
       - "6379:6379"
     command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
     networks:
       - werewolf-net
 
@@ -22,7 +25,8 @@ services:
       - POD_NAME=lobby-compose-pod
       - NODE_NAME=worker-node-1
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     networks:
       - werewolf-net
 
@@ -36,8 +40,11 @@ services:
       - REDIS_URL=redis://redis:6379
       - POD_NAME=gamemaster-compose-pod
       - NODE_NAME=worker-node-2
+      - DEMO_MODE=true
+      - DEMO_SECRET=sds-werewolf-demo-secret
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     networks:
       - werewolf-net
 
@@ -52,7 +59,8 @@ services:
       - POD_NAME=chat-compose-pod
       - NODE_NAME=worker-node-3
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     networks:
       - werewolf-net
 
