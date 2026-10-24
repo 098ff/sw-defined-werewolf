@@ -6,7 +6,7 @@ set -e
 # Run this script directly on the Ubuntu Master VM (VirtualBox / Physical)
 # ==============================================================================
 
-MASTER_IP="${1:-192.168.1.100}"
+MASTER_IP="${1:-192.168.0.100}"
 K3S_VERSION="${K3S_VERSION:-v1.28.8+k3s1}"
 INSTALL_DIR="/var/lib/werewolf-redis"
 
