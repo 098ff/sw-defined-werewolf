@@ -55,7 +55,7 @@ Executed when the 45-second timer expires or all living active role holders have
    - Otherwise $\rightarrow$ Advance to `DAY` (`phase_end_time = Redis TIME + 60s`, clear night actions).
 
 ### 3.3 Day Phase & Voting Resolution Pipeline
-Executed when the 60-second timer expires:
+Executed when the 60-second timer expires or all living players have voted (whichever comes first):
 1. Count ballots from living players.
 2. If `Total Ballots == 0` or `SKIP >= highest_candidate_votes`, no execution occurs.
 3. If there is a tie for highest votes between candidates, no execution occurs.
